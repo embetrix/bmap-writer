@@ -7,6 +7,7 @@ if [ ! -f test.img ]; then
     dd if=/dev/urandom of=test.img bs=1M count=10 > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=1M count=2 seek=12 conv=notrunc  > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=1M count=5 seek=16 conv=notrunc  > /dev/null 2>&1
+    dd if=/dev/urandom of=test.img bs=4k count=1 seek=131072 conv=notrunc  > /dev/null 2>&1
 fi
 
 if [ ! -f test.img.gz ] || [ ! -f test.img.xz ]; then
