@@ -23,6 +23,7 @@
 #include <vector>
 #include <iomanip>
 #include <string>
+#include <chrono>
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -328,6 +329,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error: Device " << device << " is mounted. Please unmount it before proceeding." << std::endl;
         return 1;
     }
+    auto start = std::chrono::high_resolution_clock::now();
     bmap_t bmap = parseBMap(bmapFile);
     if (bmap.blockSize == 0) {
         std::cerr << "BlockSize not found in BMAP file" << std::endl;
@@ -344,7 +346,9 @@ int main(int argc, char *argv[]) {
         std::cerr << "Failed to write image to device" << std::endl;
         return ret;
     }
-    std::cout << "Process completed." << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Process completed in " << std::fixed << std::setprecision(2) << elapsed.count() << " seconds." << std::endl;
 
     return 0;
 }
