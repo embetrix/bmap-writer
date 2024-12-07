@@ -41,7 +41,7 @@ endif()
 
 # Add the executable
 add_executable(bmap-writer bmap-writer.cpp)
-target_compile_options(bmap-writer PUBLIC -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
+target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
 target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES})
