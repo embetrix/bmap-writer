@@ -32,6 +32,6 @@ echo "## Write the file with bmap-writer and gzip"
 ./bmap-writer test.img.gz test.img.bmap test.gz.img.out
 cmp test.img.out test.gz.img.out
 
-# echo "## Write the file with bmap-writer and xz"
-# ./bmap-writer test.img.xz test.img.bmap test.xz.img.out
-# cmp test.img.out test.xz.img.out
+echo "## Write the file with bmap-writer and xz"
+./bmap-writer test.img.xz test.img.bmap test.xz.img.out
+cmp test.img.out test.xz.img.out
