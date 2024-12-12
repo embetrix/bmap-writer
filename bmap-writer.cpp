@@ -48,6 +48,8 @@
 #define XZ_MAGIC_4   'Z'
 #define XZ_MAGIC_5  0x00
 
+#define DEC_BUFFER_SIZE (1024 * 16)
+
 struct range_t {
     std::string checksum;
     std::string range;
@@ -119,31 +121,28 @@ void computeSHA256(const char *buffer, size_t size, char *output) {
     output[CHECKSUM_LENGTH] = 0;
 }
 
-bool isCompressed(const std::string &imageFile, std::string &compressionType) {
+int getCompressionType(const std::string &imageFile, std::string &compressionType) {
+
     std::ifstream file(imageFile, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open image file" << std::endl;
-        return false;
+        return -1;
     }
 
     unsigned char buffer[6];
     file.read(reinterpret_cast<char*>(buffer), 6);
     file.close();
 
-    // Check for gzip magic numbers
     if (buffer[0] == GZIP_MAGIC_0 && buffer[1] == GZIP_MAGIC_1) {
         compressionType = "gzip";
-        return true;
-    }
-
-    // Check for xz magic numbers
-    if (buffer[0] == XZ_MAGIC_0 && buffer[1] == XZ_MAGIC_1 && buffer[2] == XZ_MAGIC_2 &&
-        buffer[3] == XZ_MAGIC_3 && buffer[4] == XZ_MAGIC_4 && buffer[5] == XZ_MAGIC_5) {
+    } else if (buffer[0] == XZ_MAGIC_0 && buffer[1] == XZ_MAGIC_1 && buffer[2] == XZ_MAGIC_2 &&
+               buffer[3] == XZ_MAGIC_3 && buffer[4] == XZ_MAGIC_4 && buffer[5] == XZ_MAGIC_5) {
         compressionType = "xz";
-        return true;
+    } else {
+        compressionType = "none";
     }
 
-    return false;
+    return 0;
 }
 
 bool isDeviceMounted(const std::string &device) {
@@ -178,6 +177,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
     gzFile gzImg = nullptr;
     lzma_stream lzmaStream = LZMA_STREAM_INIT;
+    std::vector<char> decBufferIn(DEC_BUFFER_SIZE);
+    size_t decHead = 0;
     std::ifstream imgFile;
 
     if (compressionType == "gzip") {
@@ -194,12 +195,14 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             close(dev_fd);
             return 1;
         }
-        lzma_ret ret = lzma_stream_decoder(&lzmaStream, UINT64_MAX, LZMA_CONCATENATED);
+        lzma_ret ret = lzma_stream_decoder(&lzmaStream, UINT64_MAX, 0);
         if (ret != LZMA_OK) {
             std::cerr << "Failed to initialize lzma decoder: " << ret << std::endl;
             close(dev_fd);
             return 1;
         }
+
+        lzmaStream.avail_in = 0;
     } else if (compressionType == "none") {
         imgFile.open(imageFile, std::ios::binary);
         if (!imgFile) {
@@ -222,7 +225,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
         size_t bufferSize = (endBlock - startBlock + 1) * bmap.blockSize;
         std::vector<char> buffer(bufferSize);
-        size_t bytesRead = 0;
+        size_t outBytes = 0;
 
         if (compressionType == "gzip") {
             gzseek(gzImg, static_cast<off_t>(startBlock * bmap.blockSize), SEEK_SET);
@@ -233,35 +236,80 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 gzclose(gzImg);
                 return 1;
             }
-            bytesRead = static_cast<size_t>(readBytes);
-        // ToDO: Fix support for xz decompression
+            outBytes = static_cast<size_t>(readBytes);
         } else if (compressionType == "xz") {
-            imgFile.seekg(static_cast<std::streamoff>(startBlock * bmap.blockSize), std::ios::beg);
-            imgFile.read(buffer.data(), static_cast<std::streamsize>(bufferSize));
-            bytesRead = static_cast<size_t>(imgFile.gcount());
-            if (bytesRead == 0 && imgFile.fail()) {
-                std::cerr << "Failed to read from xz image file" << std::endl;
-                close(dev_fd);
-                imgFile.close();
-                return 1;
-            }
-            lzmaStream.next_in = reinterpret_cast<const uint8_t*>(buffer.data());
-            lzmaStream.avail_in = bytesRead;
-            lzmaStream.next_out = reinterpret_cast<uint8_t*>(buffer.data());
-            lzmaStream.avail_out = bufferSize;
+            const size_t outStart = startBlock * bmap.blockSize;
+            const size_t outEnd = ((endBlock + 1) * bmap.blockSize);
 
-            lzma_ret ret = lzma_code(&lzmaStream, LZMA_RUN);
-            if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
-                std::cerr << "Failed to decompress xz image file: " << ret << std::endl;
-                close(dev_fd);
-                imgFile.close();
-                return 1;
+            // Initialize the output buffer for the decompressor
+            lzmaStream.next_out = reinterpret_cast<uint8_t*>(buffer.data());
+            lzmaStream.avail_out = static_cast<size_t>(buffer.size());
+
+            while (outBytes < bufferSize) {
+                size_t chunkSize = 0;
+
+                // Whenever no more input data is available, read some from the compressed file
+                // and reset the input parameters for the decompressor
+                if (lzmaStream.avail_in == 0) {
+                    imgFile.read(decBufferIn.data(), static_cast<ssize_t>(decBufferIn.size()));
+                    if (imgFile.gcount() == 0 && imgFile.fail()) {
+                        std::cerr << "Failed to read from xz image file" << std::endl;
+                        close(dev_fd);
+                        imgFile.close();
+                        return 1;
+                    } else {
+                        lzmaStream.next_in = reinterpret_cast<const uint8_t*>(decBufferIn.data());
+                        lzmaStream.avail_in = static_cast<size_t>(imgFile.gcount());
+                    }
+                }
+
+                // Save the current status of the output buffer...
+                chunkSize = lzmaStream.avail_out;
+
+                lzma_ret ret = lzma_code(&lzmaStream, LZMA_RUN);
+                if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
+                    std::cerr << "Failed to decompress xz image file: " << ret << std::endl;
+                    close(dev_fd);
+                    imgFile.close();
+                    return 1;
+                }
+
+                // ...and then extract the size of the decompressed chunk
+                chunkSize -= lzmaStream.avail_out;
+
+                if (decHead >= outStart && (decHead + chunkSize) <= outEnd) {
+                    // Case 1: all decoded data can be used
+                    outBytes += chunkSize;
+                } else if (decHead < outStart && (decHead + chunkSize) <= outStart) {
+                    // Case 2: all decoded data shall be discarded
+                    lzmaStream.next_out = reinterpret_cast<uint8_t*>(buffer.data());
+                    lzmaStream.avail_out = static_cast<size_t>(buffer.size());
+                } else if (decHead < outStart && (decHead + chunkSize) > outStart) {
+                    // Case 3: only the last portion of the decoded data can be used
+                    std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
+                              buffer.begin() + static_cast<long int>(chunkSize),
+                              buffer.begin());
+                    size_t validData = chunkSize - (outStart - decHead);
+                    outBytes += validData;
+                    lzmaStream.next_out = reinterpret_cast<uint8_t*>(buffer.data()) + validData;
+                    lzmaStream.avail_out = buffer.size() - validData;
+                }
+
+                // Advance the head of the decompressed data
+                decHead += chunkSize;
+
+                // In case all the required data has been decompressed OR the XZ stream is ended
+                // OR the input file has been read completely, stop this decompression loop
+                if ((lzmaStream.avail_out == 0) || (ret == LZMA_STREAM_END) ||
+                    (lzmaStream.avail_in == 0 && imgFile.eof())) {
+                    break;
+                }
             }
         } else if (compressionType == "none") {
             imgFile.seekg(static_cast<std::streamoff>(startBlock * bmap.blockSize), std::ios::beg);
             imgFile.read(buffer.data(), static_cast<std::streamsize>(bufferSize));
-            bytesRead = static_cast<size_t>(imgFile.gcount());
-            if (bytesRead == 0 && imgFile.fail()) {
+            outBytes = static_cast<size_t>(imgFile.gcount());
+            if (outBytes == 0 && imgFile.fail()) {
                 std::cerr << "Failed to read from image file" << std::endl;
                 close(dev_fd);
                 imgFile.close();
@@ -271,13 +319,13 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
         // Compute and verify the checksum
         char computedChecksum[CHECKSUM_LENGTH + 1];
-        computeSHA256(buffer.data(), bytesRead, computedChecksum);
+        computeSHA256(buffer.data(), outBytes, computedChecksum);
         if (strcmp(computedChecksum, range.checksum.c_str()) != 0) {
             std::cerr << "Checksum verification failed for range: " << range.range << std::endl;
             std::cerr << "Computed Checksum: " << computedChecksum << std::endl;
             std::cerr << "Expected Checksum: " << range.checksum << std::endl;
             //std::cerr << "Buffer content (hex):" << std::endl;
-            //printBufferHex(buffer.data(), bytesRead);
+            //printBufferHex(buffer.data(), outBytes);
             close(dev_fd);
             if (compressionType == "gzip") {
                 gzclose(gzImg);
@@ -287,7 +335,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             return 1;
         }
 
-        if (pwrite(dev_fd, buffer.data(), bytesRead, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
+        if (pwrite(dev_fd, buffer.data(), outBytes, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
             std::cerr << "Write to device failed"<< std::endl;
             close(dev_fd);
             if (compressionType == "gzip") {
@@ -337,11 +385,14 @@ int main(int argc, char *argv[]) {
     }
     int ret=0;
     std::string compressionType;
-    if (isCompressed(imageFile, compressionType)) {
-        ret = BmapWriteImage(imageFile, bmap, device, compressionType);
-    } else {
-        ret = BmapWriteImage(imageFile, bmap, device, "none");
+
+    ret = getCompressionType(imageFile, compressionType);
+    if (ret != 0) {
+        std::cerr << "Failed to detect compression type" << std::endl;
+        return ret;
     }
+
+    ret = BmapWriteImage(imageFile, bmap, device, compressionType);
     if (ret != 0) {
         std::cerr << "Failed to write image to device" << std::endl;
         return ret;
