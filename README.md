@@ -1,8 +1,11 @@
+
 # bmap-writer
 
 `bmap-writer` is a command-line utility designed to efficiently write disk images to storage devices using block mapping (BMAP). 
 It serves as a lightweight alternative to the Yocto BMAP tool, specifically for embedded systems. 
 Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python and focuses solely on writing an image.
+
+<p align ="center"><img src=bmap-writer.jpeg width=200 height=200 /></p>
 
 ## Key Features
 
