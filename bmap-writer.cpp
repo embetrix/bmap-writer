@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <iomanip>
 #include <string>
@@ -104,21 +105,24 @@ bmap_t parseBMap(const std::string &filename) {
     return bmapData;
 }
 
-void computeSHA256(const char *buffer, size_t size, char *output) {
+std::string computeSHA256(const std::vector<char>& buffer, size_t size) {
     EVP_MD_CTX *mdctx;
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hash_len;
 
     mdctx = EVP_MD_CTX_new();
     EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
-    EVP_DigestUpdate(mdctx, buffer, size);
+    EVP_DigestUpdate(mdctx, buffer.data(), size);
     EVP_DigestFinal_ex(mdctx, hash, &hash_len);
     EVP_MD_CTX_free(mdctx);
 
+    std::ostringstream output;
+    output << std::hex;
     for (unsigned int i = 0; i < hash_len; ++i) {
-        sprintf(output + (i * 2), "%02x", hash[i]);
+        output << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(hash[i]);
     }
-    output[CHECKSUM_LENGTH] = 0;
+
+    return output.str();
 }
 
 int getCompressionType(const std::string &imageFile, std::string &compressionType) {
@@ -318,9 +322,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         }
 
         // Compute and verify the checksum
-        char computedChecksum[CHECKSUM_LENGTH + 1];
-        computeSHA256(buffer.data(), outBytes, computedChecksum);
-        if (strcmp(computedChecksum, range.checksum.c_str()) != 0) {
+        std::string computedChecksum = computeSHA256(buffer, outBytes);
+        if (computedChecksum != range.checksum) {
             std::cerr << "Checksum verification failed for range: " << range.range << std::endl;
             std::cerr << "Computed Checksum: " << computedChecksum << std::endl;
             std::cerr << "Expected Checksum: " << range.checksum << std::endl;
