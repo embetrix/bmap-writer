@@ -10,10 +10,19 @@ if [ ! -f test.img ]; then
     dd if=/dev/urandom of=test.img bs=4k count=1 seek=131072 conv=notrunc  > /dev/null 2>&1
 fi
 
-if [ ! -f test.img.gz ] || [ ! -f test.img.xz ]; then
-    echo "## Compress the file with xz and gzip"
-    xz   -z test.img -c   > test.img.xz
+if [ ! -f test.img.gz ]; then
+    echo "## Compress the file with gzip"
     gzip -9 test.img -c   > test.img.gz
+fi
+
+if [ ! -f test.img.xz ]; then
+    echo "## Compress the file with xz"
+    xz   -z test.img -c   > test.img.xz
+fi
+
+if [ ! -f test.img.zst ]; then
+    echo "## Compress the file with zstd"
+    zstd -f -k -c -3 --threads=8 test.img > test.img.zst
 fi
 
 if [ ! -f test.img.bmap ] ; then
@@ -35,3 +44,7 @@ cmp test.img.out test.gz.img.out
 echo "## Write the file with bmap-writer and xz"
 ./bmap-writer test.img.xz test.img.bmap test.xz.img.out
 cmp test.img.out test.xz.img.out
+
+echo "## Write the file with bmap-writer and zstd"
+./bmap-writer test.img.zst test.img.bmap test.zst.img.out
+cmp test.img.out test.zst.img.out

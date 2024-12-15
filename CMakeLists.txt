@@ -39,12 +39,21 @@ else()
     message(FATAL_ERROR "liblzma not found")
 endif()
 
+# Find libzstd
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
+if (ZSTD_FOUND)
+    include_directories(${ZSTD_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "libzstd not found")
+endif()
+
 # Add the executable
 add_executable(bmap-writer bmap-writer.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES})
+target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZSTD_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
