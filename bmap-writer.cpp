@@ -193,7 +193,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     int ret = 0;
 
     try {
-        dev_fd = open(device.c_str(), O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+        dev_fd = open(device.c_str(), O_WRONLY | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
         if (dev_fd < 0) {
             throw std::string("Unable to open or create target device");
         }
