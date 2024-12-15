@@ -36,6 +36,7 @@
 #include <openssl/evp.h>
 #include <zlib.h>
 #include <lzma.h>
+#include <zstd.h>
 
 #define CHECKSUM_LENGTH 64
 #define RANGE_LENGTH    19
@@ -48,6 +49,10 @@
 #define XZ_MAGIC_3   'X'
 #define XZ_MAGIC_4   'Z'
 #define XZ_MAGIC_5  0x00
+#define ZSTD_MAGIC_0 0x28
+#define ZSTD_MAGIC_1 0xb5
+#define ZSTD_MAGIC_2 0x2f
+#define ZSTD_MAGIC_3 0xfd
 
 #define DEC_BUFFER_SIZE (1024 * 16)
 
@@ -142,6 +147,9 @@ int getCompressionType(const std::string &imageFile, std::string &compressionTyp
     } else if (buffer[0] == XZ_MAGIC_0 && buffer[1] == XZ_MAGIC_1 && buffer[2] == XZ_MAGIC_2 &&
                buffer[3] == XZ_MAGIC_3 && buffer[4] == XZ_MAGIC_4 && buffer[5] == XZ_MAGIC_5) {
         compressionType = "xz";
+    } else if (buffer[0] == ZSTD_MAGIC_0 && buffer[1] == ZSTD_MAGIC_1 &&
+               buffer[2] == ZSTD_MAGIC_2 && buffer[3] == ZSTD_MAGIC_3) {
+        compressionType = "zstd";
     } else {
         compressionType = "none";
     }
@@ -176,6 +184,9 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     gzFile gzImg = nullptr;
     lzma_stream lzmaStream = LZMA_STREAM_INIT;
     std::vector<char> decBufferIn(DEC_BUFFER_SIZE);
+    ZSTD_DStream* zstdStream = nullptr;
+    ZSTD_inBuffer zstdIn = { nullptr, 0, 0 };
+    ZSTD_outBuffer zstdOut = { nullptr, 0, 0 };
     size_t decHead = 0;
     std::ifstream imgFile;
     int dev_fd = -1;
@@ -203,6 +214,20 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             }
 
             lzmaStream.avail_in = 0;
+        } else if (compressionType == "zstd") {
+            imgFile.open(imageFile, std::ios::binary);
+            if (!imgFile) {
+                throw std::string("Unable to open image file");
+            }
+
+            zstdStream = ZSTD_createDStream();
+            if (zstdStream == nullptr) {
+                throw std::string("Failed to initialize zstd decoder");
+            }
+
+            zstdIn.src = decBufferIn.data();
+            zstdIn.size = decBufferIn.size();
+            zstdIn.pos = zstdIn.size;
         } else if (compressionType == "none") {
             imgFile.open(imageFile, std::ios::binary);
             if (!imgFile) {
@@ -292,6 +317,61 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                         break;
                     }
                 }
+            } else if (compressionType == "zstd") {
+                const size_t outStart = startBlock * bmap.blockSize;
+                const size_t outEnd = ((endBlock + 1) * bmap.blockSize);
+
+                // Init output buffer
+                zstdOut.dst = buffer.data();
+                zstdOut.size = buffer.size();
+                zstdOut.pos = 0;
+
+                while (outBytes < bufferSize) {
+                    size_t chunkSize = 0;
+                    size_t zrc;
+
+                    if (zstdIn.pos == zstdIn.size) {
+                        imgFile.read(decBufferIn.data(), static_cast<ssize_t>(decBufferIn.size()));
+                        if (imgFile.gcount() == 0 && imgFile.fail()) {
+                            throw std::string("Failed to read from zstd image file");
+                        } else {
+                            zstdIn.size = static_cast<size_t>(imgFile.gcount());
+                            zstdIn.pos = 0;
+                        }
+                    }
+
+                    zrc = ZSTD_decompressStream(zstdStream, &zstdOut, &zstdIn);
+                    if (ZSTD_isError(zrc)) {
+                        throw std::string("Failed to decompress zstd image file: ") + std::string(ZSTD_getErrorName(zrc));
+                    }
+
+                    chunkSize = zstdOut.pos - outBytes;
+
+                    if (decHead >= outStart && (decHead + chunkSize) <= outEnd) {
+                        // Case 1: all decoded data can be used
+                        outBytes += chunkSize;
+                    } else if (decHead < outStart && (decHead + chunkSize) <= outStart) {
+                        // Case 2: all decoded data shall be discarded
+                        zstdOut.pos = 0;
+                    } else if (decHead < outStart && (decHead + chunkSize) > outStart) {
+                        // Case 3: only the last portion of the decoded data can be used
+                        std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
+                                  buffer.begin() + static_cast<long int>(chunkSize),
+                                  buffer.begin());
+                        size_t validData = chunkSize - (outStart - decHead);
+                        outBytes += validData;
+                        zstdOut.pos = validData;
+                    }
+
+                    // Advance the head of the decompressed data
+                    decHead += chunkSize;
+
+                    // If no more data is available in the input buffer and the input file has been
+                    // read completely, stop this decompression loop
+                    if ((zstdIn.pos == zstdIn.size) && imgFile.eof()) {
+                        break;
+                    }
+                }
             } else if (compressionType == "none") {
                 imgFile.seekg(static_cast<std::streamoff>(startBlock * bmap.blockSize), std::ios::beg);
                 imgFile.read(buffer.data(), static_cast<std::streamsize>(bufferSize));
@@ -341,6 +421,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         gzclose(gzImg);
     } else if (compressionType == "xz") {
         lzma_end(&lzmaStream);
+    } else if (compressionType == "zstd") {
+        ZSTD_freeDStream(zstdStream);
     }
 
     return ret;

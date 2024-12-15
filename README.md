@@ -11,7 +11,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 - **Alternative to Yocto BMAP Tool**: Provides a lightweight alternative specifically for embedded systems.
 - **No Python Required**: Does not require Python, making it easier to integrate into various environments.
-- **Support for Compressed Images**: Handles gzip and xz compressed images, decompressing them on-the-fly during the writing process.
+- **Support for Compressed Images**: Handles gzip, xz anz zstd compressed images, decompressing them on-the-fly during the writing process.
 - **Checksum Verification**: Ensures data integrity by verifying checksums for each block.
 - **Efficient Writing**: Writes only the necessary blocks, reducing the overall write time and wear on storage devices.
 
