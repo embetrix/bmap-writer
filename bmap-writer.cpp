@@ -78,7 +78,7 @@ bmap_t parseBMap(const std::string &filename) {
                 xmlChar *blockSizeStr = xmlNodeGetContent(node);
                 bmapData.blockSize = static_cast<size_t>(std::stoul(reinterpret_cast<const char *>(blockSizeStr)));
                 xmlFree(blockSizeStr);
-                std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
+                //std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
             } else if (strcmp(reinterpret_cast<const char *>(node->name), "BlockMap") == 0) {
                 for (xmlNodePtr rangeNode = node->children; rangeNode; rangeNode = rangeNode->next) {
                     if (rangeNode->type == XML_ELEMENT_NODE && strcmp(reinterpret_cast<const char *>(rangeNode->name), "Range") == 0) {
@@ -217,7 +217,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             if (sscanf(range.range.c_str(), "%zu-%zu", &startBlock, &endBlock) == 1) {
                 endBlock = startBlock;  // Handle single block range
             }
-            std::cout << "Processing Range: startBlock=" << startBlock << ", endBlock=" << endBlock << std::endl;
+            //std::cout << "Processing Range: startBlock=" << startBlock << ", endBlock=" << endBlock << std::endl;
 
             size_t bufferSize = (endBlock - startBlock + 1) * bmap.blockSize;
             std::vector<char> buffer(bufferSize);
