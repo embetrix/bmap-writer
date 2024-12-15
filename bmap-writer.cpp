@@ -74,20 +74,20 @@ bmap_t parseBMap(const std::string &filename) {
     xmlNodePtr root_element = xmlDocGetRootElement(doc);
     for (xmlNodePtr node = root_element->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (strcmp((const char *)node->name, "BlockSize") == 0) {
+            if (strcmp(reinterpret_cast<const char *>(node->name), "BlockSize") == 0) {
                 xmlChar *blockSizeStr = xmlNodeGetContent(node);
-                bmapData.blockSize = static_cast<size_t>(std::stoul((const char *)blockSizeStr));
+                bmapData.blockSize = static_cast<size_t>(std::stoul(reinterpret_cast<const char *>(blockSizeStr)));
                 xmlFree(blockSizeStr);
                 std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
-            } else if (strcmp((const char *)node->name, "BlockMap") == 0) {
+            } else if (strcmp(reinterpret_cast<const char *>(node->name), "BlockMap") == 0) {
                 for (xmlNodePtr rangeNode = node->children; rangeNode; rangeNode = rangeNode->next) {
-                    if (rangeNode->type == XML_ELEMENT_NODE && strcmp((const char *)rangeNode->name, "Range") == 0) {
-                        xmlChar *checksum = xmlGetProp(rangeNode, (const xmlChar *)"chksum");
+                    if (rangeNode->type == XML_ELEMENT_NODE && strcmp(reinterpret_cast<const char *>(rangeNode->name), "Range") == 0) {
+                        xmlChar *checksum = xmlGetProp(rangeNode, reinterpret_cast<const xmlChar *>("chksum"));
                         xmlChar *range = xmlNodeGetContent(rangeNode);
 
                         range_t r;
-                        r.checksum = (const char *)checksum;
-                        r.range = (const char *)range;
+                        r.checksum = reinterpret_cast<const char *>(checksum);
+                        r.range = reinterpret_cast<const char *>(range);
 
                         bmapData.ranges.push_back(r);
                         //std::cout << "Parsed Range: checksum=" << r.checksum << ", range=" << r.range << std::endl;
