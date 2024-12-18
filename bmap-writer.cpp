@@ -34,7 +34,6 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <openssl/evp.h>
-#include <openssl/sha.h>
 #include <archive.h>
 
 
@@ -47,6 +46,54 @@ struct range_t {
 struct bmap_t {
     std::vector<range_t> ranges;
     size_t blockSize;
+};
+
+struct checksum_t {
+    EVP_MD_CTX *mdctx;
+    unsigned char checksum[EVP_MAX_MD_SIZE];
+    unsigned int checksum_len;
+};
+
+static void checksumDeinit(struct checksum_t* checksum)
+{
+    if (checksum->mdctx) {
+        EVP_MD_CTX_free(checksum->mdctx);
+        checksum->mdctx = nullptr;
+    }
+}
+
+static bool checksumInit(struct checksum_t* checksum)
+{
+    int success = false;
+
+    checksum->checksum_len = 0;
+    checksum->mdctx = EVP_MD_CTX_new();
+    if (checksum->mdctx != nullptr) {
+        int ret = EVP_DigestInit_ex(checksum->mdctx, EVP_sha256(), nullptr);
+        success = (ret == 1);
+    }
+
+    return success;
+}
+
+static void checksumUpdate(struct checksum_t* checksum, const std::vector<char>& buffer, size_t size)
+{
+    EVP_DigestUpdate(checksum->mdctx, buffer.data(), size);
+}
+
+static int checksumFinish(struct checksum_t* checksum)
+{
+    int ret = EVP_DigestFinal_ex(checksum->mdctx, checksum->checksum, &checksum->checksum_len);
+    return (ret == 1);
+}
+
+static std::string checksumGetString(struct checksum_t* checksum) {
+    std::ostringstream output;
+    output << std::hex;
+    for (unsigned int i = 0; i < checksum->checksum_len; ++i) {
+        output << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(checksum->checksum[i]);
+    }
+    return output.str();
 };
 
 bmap_t parseBMap(const std::string &filename) {
@@ -95,15 +142,6 @@ bmap_t parseBMap(const std::string &filename) {
     return bmapData;
 }
 
-std::string convertHashToHexString(const std::vector<unsigned char> &hash) {
-    std::stringstream output;
-    output << std::hex << std::setfill('0');
-    for (const auto &byte : hash) {
-        output << std::setw(2) << static_cast<int>(byte);
-    }
-    return output.str();
-}
-
 bool isDeviceMounted(const std::string &device) {
     std::ifstream mounts("/proc/mounts");
     std::string line;
@@ -117,6 +155,7 @@ bool isDeviceMounted(const std::string &device) {
 
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
     struct archive *a = nullptr;
+    checksum_t checksum;
     int dev_fd = -1;
     int ret = 0;
 
@@ -167,6 +206,10 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             const size_t outStart = range.startBlock * bmap.blockSize;
             const size_t outEnd = ((range.endBlock + 1) * bmap.blockSize);
 
+            if (!checksumInit(&checksum)) {
+                throw std::string("Failed to init checksum engine");
+            }
+
             while (outBytes < bufferSize) {
                 ssize_t readData = archive_read_data(a, buffer.data() + outBytes, bufferSize - outBytes);
 
@@ -205,19 +248,21 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 throw std::string("Read back from device failed");
             }
 
+            checksumUpdate(&checksum, buffer, outBytes);
+
             // Compute and verify the checksum
-            std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
-            if (!SHA256(reinterpret_cast<const unsigned char *>(buffer.data()), outBytes, hash.data())) {
+            if (!checksumFinish(&checksum)) {
                 throw std::string("Failed to compute SHA256 checksum");
             }
-            if (convertHashToHexString(hash).compare(range.checksum) != 0) {
+            if (checksumGetString(&checksum).compare(range.checksum) != 0) {
                 std::stringstream err;
                 err << "Read-back verification failed for range: " << range.startBlock << " - " << range.endBlock << std::endl;
-                err << "Read Checksum: " << convertHashToHexString(hash) << std::endl;
+                err << "Read Checksum: " << checksumGetString(&checksum) << std::endl;
                 err << "Expected Checksum: " << range.checksum;
                 throw std::string(err.str());
             }
 
+            checksumDeinit(&checksum);
         }
 
         if (fsync(dev_fd) != 0) {
@@ -238,6 +283,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     if (a != nullptr) {
         archive_read_free(a);
     }
+
+    checksumDeinit(&checksum);
 
     return ret;
 }
