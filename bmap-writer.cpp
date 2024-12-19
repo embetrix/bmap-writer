@@ -125,6 +125,7 @@ bool isDeviceMounted(const std::string &device) {
 }
 
 void printBufferHex(const char *buffer, size_t size) {
+#ifdef DEBUG
     for (size_t i = 0; i < size; ++i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << (unsigned int)(unsigned char)buffer[i];
         if ((i + 1) % 16 == 0) {
@@ -134,6 +135,11 @@ void printBufferHex(const char *buffer, size_t size) {
         }
     }
     std::cout << std::endl;
+#else
+    (void)buffer;
+    (void)size;
+    return;
+#endif
 }
 
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
@@ -229,7 +235,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 err << "Computed Checksum: " << computedChecksum << std::endl;
                 err << "Expected Checksum: " << range.checksum;
                 //std::cerr << "Buffer content (hex):" << std::endl;
-                //printBufferHex(buffer.data(), outBytes);
+                printBufferHex(buffer.data(), outBytes);
                 throw std::string(err.str());
             }
 
@@ -260,7 +266,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     return ret;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char *argv[]) {
     if (argc < 4) {
         std::cerr << "Usage: " << argv[0] << " <image-file> <bmap-file> <target-device>" << std::endl;
         return 1;
