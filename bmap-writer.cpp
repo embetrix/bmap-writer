@@ -247,7 +247,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             throw std::string("fsync failed after all writes");
         }
 
-        std::cout << "Finished writing image to device." << std::endl;
+        std::cout << "Finished writing image to device: " << device << std::endl;
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
@@ -277,7 +277,7 @@ int main(int argc, const char *argv[]) {
 
     std::cout << "Starting bmap writer..." << std::endl;
     if (isDeviceMounted(device)) {
-        std::cerr << "Error: Device " << device << " is mounted. Please unmount it before proceeding." << std::endl;
+        std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
         return 1;
     }
     auto start = std::chrono::high_resolution_clock::now();
@@ -288,7 +288,7 @@ int main(int argc, const char *argv[]) {
     }
     int ret = BmapWriteImage(imageFile, bmap, device);
     if (ret != 0) {
-        std::cerr << "Failed to write image to device" << std::endl;
+        std::cerr << "Failed to write image to device: " << device << std::endl;
         return ret;
     }
     auto end = std::chrono::high_resolution_clock::now();
