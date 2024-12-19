@@ -55,7 +55,6 @@ bmap_t parseBMap(const std::string &filename) {
 
     xmlDocPtr doc = xmlReadFile(filename.c_str(), NULL, 0);
     if (doc == NULL) {
-        std::cerr << "Failed to parse " << filename << std::endl;
         return bmapData;
     }
 
@@ -283,8 +282,8 @@ int main(int argc, const char *argv[]) {
     }
     auto start = std::chrono::high_resolution_clock::now();
     bmap_t bmap = parseBMap(bmapFile);
-    if (bmap.blockSize == 0) {
-        std::cerr << "BlockSize not found in BMAP file" << std::endl;
+    if (bmap.blockSize == 0 || bmap.ranges.empty()) {
+        std::cerr << "Failed to parse file: " << bmapFile << std::endl;
         return 1;
     }
     int ret = BmapWriteImage(imageFile, bmap, device);
