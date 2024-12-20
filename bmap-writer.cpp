@@ -175,7 +175,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     try {
         size_t decHead = 0;
 
-        dev_fd = open(device.c_str(), O_WRONLY | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
+        dev_fd = open(device.c_str(), O_RDWR | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
         if (dev_fd < 0) {
             throw std::string("Unable to open or create target device");
         }
@@ -272,12 +272,29 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                     throw std::string("Write to device failed");
                 }
 
-                checksumUpdate(&checksum, buffer, outBytes);
-
                 writtenSize += outBytes;
             }
 
-            // Compute and verify the checksum
+            // Read back written data and compute checksum on it.
+            size_t readSize = 0;
+            while (readSize < writtenSize) {
+                size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;
+                if (bufferSize > (writtenSize - readSize)) {
+                    bufferSize = (writtenSize - readSize);
+                }
+
+                std::vector<char> buffer(bufferSize);
+
+                ssize_t readData = pread(dev_fd, buffer.data(), buffer.size(), writeOffset + static_cast<off_t>(readSize));
+                if (readData != buffer.size()) {
+                    throw std::string("Failed to re-read from device: ") + std::to_string(readData);
+                }
+
+                checksumUpdate(&checksum, buffer, buffer.size());
+
+                readSize += static_cast<size_t>(readData);
+            }
+
             checksumFinish(&checksum);
             std::string computedChecksum = checksumGetString(&checksum);
             if (computedChecksum != range.checksum) {
@@ -287,11 +304,6 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 err << "Expected Checksum: " << range.checksum;
                 throw std::string(err.str());
             }
-            checksumDeinit(&checksum);
-        }
-
-        if (fsync(dev_fd) != 0) {
-            throw std::string("fsync failed after all writes");
         }
 
         std::cout << "Finished writing image to device: " << device << std::endl;
