@@ -11,16 +11,16 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 ## Key Features
 
-- **Alternative to Yocto BMAP Tool**: Provides a lightweight alternative specifically for embedded systems.
-- **No Python Required**: Does not require Python, making it easier to integrate into various environments.
-- **Support for Compressed Images**: Handles all compression filters that are supported by `libarchive`, decompressing the data on-the-fly during the writing process.
-- **Checksum Verification**: Ensures data integrity by verifying checksums for each block.
-- **Efficient Writing**: Writes only the necessary blocks, reducing the overall write time and wear on storage devices.
+- Provides a lightweight alternative specifically for embedded systems.
+- Does not require Python, making it easier to integrate into various environments.
+- Handles all compression filters that are supported by `libarchive`, decompressing the data on-the-fly during the writing process.
+- Ensures data integrity by verifying checksums for each block.
+- Writes only the necessary blocks, reducing the overall write time and wear on storage devices.
 
 ## How It Works
 
-1. **Generate a BMAP File**: Create a BMAP file for your disk image using `bmaptool`.
-2. **Write the Image**: Use `bmap-writer` to write the image to your target device, specifying the BMAP file for efficient block mapping.
+1. Create a BMAP file for your disk image using `bmaptool`.
+2. Use `bmap-writer` to write the image to your target device, specifying the BMAP file for efficient block mapping.
 
 ## Example Usage
 
@@ -35,23 +35,20 @@ You are free to use, modify, and distribute this software under the conditions o
 
 For more information about the GPLv3 license, refer to the [LICENSE](LICENSE) file in this repository or visit [GNU's official page](https://www.gnu.org/licenses/gpl-3.0.html).
 
----
 
 ## Commercial License
 
 For organizations or individuals requiring the use of `bmap-writer` in proprietary applications or with different licensing terms, a **commercial license** is available.
 
 The commercial license provides:
-- **Proprietary Use**: Freedom from the obligations imposed by the GPLv3 license.
-- **Additional Features and Support**: Priority access to updates, integration help, and extended documentation.
-- **Customization Options**: Tailored development and deployment solutions.
+- Freedom from the obligations imposed by the GPLv3 license.
+- Priority access to updates, integration help, and extended documentation.
+- Tailored development and deployment solutions.
 
-To obtain a commercial license or inquire further, please contact:
-**[info@embetrix.com]**
+To obtain a commercial license or inquire further, please contact: [**info@embetrix.com**](mailto:info@embetrix.com)
 
----
 
-## Implicit Contributor License Agreement (CLA)
+## Contributor License Agreement (CLA)
 
 By submitting a pull request to this repository, you agree to the following terms:
 
@@ -61,4 +58,3 @@ By submitting a pull request to this repository, you agree to the following term
    - Use, modify, sublicense, and distribute your contribution under alternative licenses, including commercial licenses.
 3. You understand that you retain the copyright to your contribution but agree it may be relicensed under these terms.
 
----
