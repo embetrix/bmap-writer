@@ -62,6 +62,18 @@ echo "## Write the file with bmap-writer"
 ./bmap-writer test.img test.img.bmap test.none.img.out
 cmp test.img.out test.none.img.out
 
+echo "## Write the file with bmap-writer (with random write buffer size)"
+./bmap-writer -b $(( $RANDOM * 1024 )) test.img test.img.bmap test.none.img.out
+cmp test.img.out test.none.img.out
+
+echo "## Write the file with bmap-writer and verify written data"
+./bmap-writer -w test.img test.img.bmap test.none.img.out
+cmp test.img.out test.none.img.out
+
+echo "## Write the file with bmap-writer and skip checksum"
+./bmap-writer -n test.img test.img.bmap test.none.img.out
+cmp test.img.out test.none.img.out
+
 echo "## Write the file with bmap-writer and tar"
 ./bmap-writer test.img.tar test.img.bmap test.tar.img.out
 cmp test.img.out test.tar.img.out
