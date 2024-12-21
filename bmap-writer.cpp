@@ -150,7 +150,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     try {
         size_t decHead = 0;
 
-        dev_fd = open(device.c_str(), O_WRONLY | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
+        dev_fd = open(device.c_str(), O_RDWR | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
         if (dev_fd < 0) {
             throw std::string("Unable to open or create target device");
         }
@@ -226,20 +226,24 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 decHead += chunkSize;
             }
 
-            // Compute and verify the checksum
-            std::string computedChecksum = computeSHA256(buffer, outBytes);
-            if (computedChecksum != range.checksum) {
-                std::stringstream err;
-                err << "Checksum verification failed for range: " << range.range << std::endl;
-                err << "Computed Checksum: " << computedChecksum << std::endl;
-                err << "Expected Checksum: " << range.checksum;
-                //std::cerr << "Buffer content (hex):" << std::endl;
-                printBufferHex(buffer.data(), outBytes);
-                throw std::string(err.str());
-            }
 
             if (pwrite(dev_fd, buffer.data(), outBytes, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
                 throw std::string("Write to device failed");
+            }
+
+            // Read back the written data and verify its checksum
+            std::fill(buffer.begin(), buffer.end(), 0);
+            if (pread(dev_fd, buffer.data(), bufferSize, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
+                throw std::string("Read back from device failed");
+            }
+
+            std::string computedChecksum = computeSHA256(buffer, bufferSize);
+            if (computedChecksum != range.checksum) {
+                std::stringstream err;
+                err << "Read back checksum verification failed for range: " << range.range << std::endl;
+                err << "Read Checksum: " << computedChecksum << std::endl;
+                err << "Expected Checksum: " << range.checksum;
+                throw std::string(err.str());
             }
         }
 
