@@ -26,11 +26,14 @@
 #include <string>
 #include <chrono>
 #include <cstring>
+#include <cerrno>
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <sys/sysinfo.h>
+
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <openssl/evp.h>
@@ -153,6 +156,21 @@ bool isDeviceMounted(const std::string &device) {
     return false;
 }
 
+int getFreeMemory(size_t *memory, unsigned int divider = 1) {
+    struct sysinfo info;
+    int ret;
+
+    ret = sysinfo(&info);
+    if (ret == 0) {
+        *memory = info.freeram;
+        if (divider > 0) {
+            *memory /= divider;
+        }
+    }
+
+    return ret;
+}
+
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
     struct archive *a = nullptr;
     checksum_t checksum;
@@ -198,59 +216,91 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
         for (const auto &range : bmap.ranges) {
             //std::cout << "Processing Range: startBlock=" << range.startBlock << ", endBlock=" << range.endBlock << std::endl;
-
-            size_t bufferSize = (range.endBlock - range.startBlock + 1) * bmap.blockSize;
-            std::vector<char> buffer(bufferSize);
-            size_t outBytes = 0;
-
             const size_t outStart = range.startBlock * bmap.blockSize;
             const size_t outEnd = ((range.endBlock + 1) * bmap.blockSize);
+            const size_t rangeSize = (range.endBlock - range.startBlock + 1) * bmap.blockSize;
+            const off_t writeOffset = static_cast<off_t>(range.startBlock * bmap.blockSize);
+            size_t maxBufferSize = 0;
+            size_t writtenSize = 0;
+            bool endOfFile = false;
 
             if (!checksumInit(&checksum)) {
                 throw std::string("Failed to init checksum engine");
             }
 
-            while (outBytes < bufferSize) {
-                ssize_t readData = archive_read_data(a, buffer.data() + outBytes, bufferSize - outBytes);
+            if (getFreeMemory(&maxBufferSize, 2) < 0) {
+                throw std::string("Failed to get free memory");
+            } else if (maxBufferSize < bmap.blockSize) {
+                maxBufferSize = bmap.blockSize;
+            }
 
-                // If no more data is available in the input buffer and the input file has been
-                // read completely, stop this decompression loop
-                if (readData <= 0)
-                    break;
+            while ((writtenSize < rangeSize) && !endOfFile) {
+                size_t outBytes = 0;
 
-                size_t chunkSize = static_cast<size_t>(readData);
-
-                if (decHead >= outStart && (decHead + chunkSize) <= outEnd) {
-                    // Case 1: all decoded data can be used
-                    outBytes += chunkSize;
-                } else if (decHead < outStart && (decHead + chunkSize) <= outStart) {
-                    // Case 2: all decoded data shall be discarded
-                } else if (decHead < outStart && (decHead + chunkSize) > outStart) {
-                    // Case 3: only the last portion of the decoded data can be used
-                    std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
-                              buffer.begin() + static_cast<long int>(chunkSize),
-                              buffer.begin());
-                    size_t validData = chunkSize - (outStart - decHead);
-                    outBytes += validData;
+                size_t bufferSize = maxBufferSize;
+                if (bufferSize > (rangeSize - writtenSize)) {
+                    bufferSize = (rangeSize - writtenSize);
                 }
 
-                // Advance the head of the decompressed data
-                decHead += chunkSize;
+                std::vector<char> buffer(bufferSize);
+
+                while (outBytes < bufferSize) {
+                    ssize_t readData = archive_read_data(a, buffer.data() + outBytes, bufferSize - outBytes);
+
+                    // If no more data is available in the input buffer and the input file has been
+                    // read completely, stop this decompression loop
+                    if (readData <= 0) {
+                        endOfFile = true;
+                        break;
+                    }
+
+                    size_t chunkSize = static_cast<size_t>(readData);
+
+                    if (decHead >= outStart && (decHead + chunkSize) <= outEnd) {
+                        // Case 1: all decoded data can be used
+                        outBytes += chunkSize;
+                    } else if (decHead < outStart && (decHead + chunkSize) <= outStart) {
+                        // Case 2: all decoded data shall be discarded
+                    } else if (decHead < outStart && (decHead + chunkSize) > outStart) {
+                        // Case 3: only the last portion of the decoded data can be used
+                        std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
+                                  buffer.begin() + static_cast<long int>(chunkSize),
+                                  buffer.begin());
+                        size_t validData = chunkSize - (outStart - decHead);
+                        outBytes += validData;
+                    }
+
+                    // Advance the head of the decompressed data
+                    decHead += chunkSize;
+                }
+
+                if (pwrite(dev_fd, buffer.data(), outBytes, writeOffset + static_cast<off_t>(writtenSize)) < 0) {
+                    throw std::string("Write to device failed");
+                }
+
+                writtenSize += outBytes;
             }
 
-            if (pwrite(dev_fd, buffer.data(), outBytes, static_cast<off_t>(range.startBlock * bmap.blockSize)) < 0) {
-                throw std::string("Write to device failed");
+            // Read back written data and compute checksum on it.
+            size_t readSize = 0;
+            while (readSize < writtenSize) {
+                size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;
+                if (bufferSize > (writtenSize - readSize)) {
+                    bufferSize = (writtenSize - readSize);
+                }
+
+                std::vector<char> buffer(bufferSize);
+
+                ssize_t readData = pread(dev_fd, buffer.data(), buffer.size(), writeOffset + static_cast<off_t>(readSize));
+                if (readData != buffer.size()) {
+                    throw std::string("Failed to re-read from device: ") + std::to_string(readData);
+                }
+
+                checksumUpdate(&checksum, buffer, buffer.size());
+
+                readSize += static_cast<size_t>(readData);
             }
 
-            // Read back the written data and verify its checksum
-            std::fill(buffer.begin(), buffer.end(), 0);
-            if (pread(dev_fd, buffer.data(), bufferSize, static_cast<off_t>(range.startBlock * bmap.blockSize)) < 0) {
-                throw std::string("Read back from device failed");
-            }
-
-            checksumUpdate(&checksum, buffer, outBytes);
-
-            // Compute and verify the checksum
             if (!checksumFinish(&checksum)) {
                 throw std::string("Failed to compute SHA256 checksum");
             }
@@ -263,10 +313,6 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             }
 
             checksumDeinit(&checksum);
-        }
-
-        if (fsync(dev_fd) != 0) {
-            throw std::string("fsync failed after all writes");
         }
 
         std::cout << "Finished writing image to device: " << device << std::endl;
@@ -283,8 +329,6 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     if (a != nullptr) {
         archive_read_free(a);
     }
-
-    checksumDeinit(&checksum);
 
     return ret;
 }
