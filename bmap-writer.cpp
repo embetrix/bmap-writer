@@ -37,9 +37,6 @@
 #include <openssl/sha.h>
 #include <archive.h>
 
-#define CHECKSUM_LENGTH 64
-#define RANGE_LENGTH    19
-
 struct range_t {
     std::string checksum;
     std::string range;
