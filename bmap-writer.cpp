@@ -91,12 +91,12 @@ bmap_t parseBMap(const std::string &filename) {
 }
 
 std::string convertHashToHexString(const std::vector<unsigned char> &hash) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
+    std::stringstream output;
+    output << std::hex << std::setfill('0');
     for (const auto &byte : hash) {
-        ss << std::setw(2) << static_cast<int>(byte);
+        output << std::setw(2) << static_cast<int>(byte);
     }
-    return ss.str();
+    return output.str();
 }
 
 bool isDeviceMounted(const std::string &device) {
