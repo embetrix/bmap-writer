@@ -29,6 +29,11 @@ bmap-writer <image-file> [bmap-file] <target-device>
 
 ```
 
+## Yocto Integration
+
+`bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer/bmap-writer_git.bb).
+
+
 ## License
 
 This project is licensed under the terms of the **GNU General Public License v3 (GPLv3)**.
