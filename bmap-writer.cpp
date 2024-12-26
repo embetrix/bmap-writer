@@ -269,7 +269,7 @@ int main(int argc, const char *argv[]) {
         device = argv[2];
     }
 
-    std::cout << "Starting bmap writer..." << std::endl;
+    std::cout << "Starting bmap-writer ("<< GIT_VERSION <<")..." << std::endl;
     if (isDeviceMounted(device)) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
         return 1;

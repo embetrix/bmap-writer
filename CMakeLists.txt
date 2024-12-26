@@ -31,9 +31,15 @@ else()
     message(FATAL_ERROR "libarchive not found")
 endif()
 
+execute_process(
+    COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} describe --tags
+    OUTPUT_VARIABLE GIT_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 # Add the executable
 add_executable(bmap-writer bmap-writer.cpp)
-target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
+target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror -DGIT_VERSION="${GIT_VERSION}")
 
 # Link the libraries
 target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${LibArchive_LIBRARIES})
