@@ -31,15 +31,22 @@ else()
     message(FATAL_ERROR "libarchive not found")
 endif()
 
+if (NOT DEFINED DEFAULT_READ_BLK_SIZE)
+  set(DEFAULT_READ_BLK_SIZE 16384)
+endif()
+
 execute_process(
     COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} describe --tags
     OUTPUT_VARIABLE GIT_VERSION
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+add_compile_definitions(READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE})
+add_compile_definitions(GIT_VERSION="${GIT_VERSION}")
+
 # Add the executable
 add_executable(bmap-writer bmap-writer.cpp)
-target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror -DGIT_VERSION="${GIT_VERSION}")
+target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
 target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${LibArchive_LIBRARIES})
@@ -50,4 +57,3 @@ install(TARGETS bmap-writer DESTINATION bin)
 # Enable testing
 enable_testing()
 add_test(NAME bmap-writer-test COMMAND ./bmap-writer-test.sh)
-

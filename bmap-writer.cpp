@@ -37,7 +37,6 @@
 #include <openssl/sha.h>
 #include <archive.h>
 
-#define KB 1024
 
 struct range_t {
     std::string checksum;
@@ -113,7 +112,6 @@ bool isDeviceMounted(const std::string &device) {
 }
 
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
-    static const size_t read_block_size = 16*KB;
     struct archive *a = nullptr;
     int dev_fd = -1;
     int ret = 0;
@@ -135,7 +133,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         archive_read_support_format_raw(a);
         archive_read_support_format_tar(a);
 
-        int r = archive_read_open_filename(a, imageFile.c_str(), read_block_size);
+        int r = archive_read_open_filename(a, imageFile.c_str(), READ_BLK_SIZE);
         if (r != ARCHIVE_OK) {
             throw std::string("Failed to open archive: ") + std::string(archive_error_string(a));
         } else {
