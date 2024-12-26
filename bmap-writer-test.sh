@@ -93,3 +93,7 @@ cmp test.img.out test.xz.img.out
 echo "## Write the file with bmap-writer and zstd"
 ./bmap-writer test.img.zst test.img.bmap test.zst.img.out
 cmp test.img.out test.zst.img.out
+
+echo "## Write the file with bmap-writer and zstd"
+./bmap-writer test.img.zst test.zst.img.out
+cmp test.img.out test.zst.img.out
