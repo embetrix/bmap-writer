@@ -34,6 +34,7 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <openssl/evp.h>
+#include <openssl/sha.h>
 #include <archive.h>
 
 #define CHECKSUM_LENGTH 64
@@ -92,24 +93,13 @@ bmap_t parseBMap(const std::string &filename) {
     return bmapData;
 }
 
-std::string computeSHA256(const std::vector<char>& buffer, size_t size) {
-    EVP_MD_CTX *mdctx;
-    unsigned char hash[EVP_MAX_MD_SIZE];
-    unsigned int hash_len;
-
-    mdctx = EVP_MD_CTX_new();
-    EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
-    EVP_DigestUpdate(mdctx, buffer.data(), size);
-    EVP_DigestFinal_ex(mdctx, hash, &hash_len);
-    EVP_MD_CTX_free(mdctx);
-
-    std::ostringstream output;
-    output << std::hex;
-    for (unsigned int i = 0; i < hash_len; ++i) {
-        output << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(hash[i]);
+std::string convertHashToHexString(const std::vector<unsigned char> &hash) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (const auto &byte : hash) {
+        ss << std::setw(2) << static_cast<int>(byte);
     }
-
-    return output.str();
+    return ss.str();
 }
 
 bool isDeviceMounted(const std::string &device) {
@@ -227,11 +217,14 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             }
 
             // Compute and verify the checksum
-            std::string computedChecksum = computeSHA256(buffer, outBytes);
-            if (computedChecksum != range.checksum) {
+            std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
+            if (!SHA256(reinterpret_cast<const unsigned char *>(buffer.data()), outBytes, hash.data())) {
+                throw std::string("Failed to compute SHA256 checksum");
+            }
+            if (convertHashToHexString(hash) != range.checksum) {
                 std::stringstream err;
                 err << "Checksum verification failed for range: " << range.range << std::endl;
-                err << "Computed Checksum: " << computedChecksum << std::endl;
+                err << "Computed Checksum: " << convertHashToHexString(hash) << std::endl;
                 err << "Expected Checksum: " << range.checksum;
                 //std::cerr << "Buffer content (hex):" << std::endl;
                 printBufferHex(buffer.data(), outBytes);
