@@ -24,10 +24,11 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 ## Usage
 
+```sh
+bmap-writer [-n] <image-file> [bmap-file] <target-device>
 ```
-bmap-writer <image-file> [bmap-file] <target-device>
 
-```
+* `-n`: Skip checksum verification
 
 ## Yocto Integration
 

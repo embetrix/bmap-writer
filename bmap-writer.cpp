@@ -29,6 +29,7 @@
 #include <cerrno>
 
 #include <fcntl.h>
+#include <getopt.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -171,7 +172,7 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
     return ret;
 }
 
-int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
+int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
     checksum_t checksum;
     int dev_fd = -1;
@@ -224,8 +225,10 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             size_t writtenSize = 0;
             bool endOfFile = false;
 
-            if (!checksumInit(&checksum)) {
-                throw std::string("Failed to init checksum engine");
+            if (!noVerify) {
+                if (!checksumInit(&checksum)) {
+                    throw std::string("Failed to init checksum engine");
+                }
             }
 
             if (getFreeMemory(&maxBufferSize, 2) < 0) {
@@ -281,41 +284,45 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 writtenSize += outBytes;
             }
 
-            // Read back written data and compute checksum on it.
-            size_t readSize = 0;
-            while (readSize < writtenSize) {
-                size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;
-                if (bufferSize > (writtenSize - readSize)) {
-                    bufferSize = (writtenSize - readSize);
+            if (!noVerify) {
+                // Read back written data and compute checksum on it.
+                size_t readSize = 0;
+                while (readSize < writtenSize) {
+                    size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;
+                    if (bufferSize > (writtenSize - readSize)) {
+                        bufferSize = (writtenSize - readSize);
+                    }
+
+                    std::vector<char> buffer(bufferSize);
+
+                    ssize_t readData = pread(dev_fd, buffer.data(), buffer.size(), writeOffset + static_cast<off_t>(readSize));
+                    if (readData != buffer.size()) {
+                        throw std::string("Failed to re-read from device: ") + std::to_string(readData);
+                    }
+
+                    checksumUpdate(&checksum, buffer, buffer.size());
+
+                    readSize += static_cast<size_t>(readData);
                 }
 
-                std::vector<char> buffer(bufferSize);
-
-                ssize_t readData = pread(dev_fd, buffer.data(), buffer.size(), writeOffset + static_cast<off_t>(readSize));
-                if (readData != buffer.size()) {
-                    throw std::string("Failed to re-read from device: ") + std::to_string(readData);
+                if (!checksumFinish(&checksum)) {
+                    throw std::string("Failed to compute SHA256 checksum");
+                } else if (checksumGetString(&checksum).compare(range.checksum) != 0) {
+                    std::stringstream err;
+                    err << "Read-back verification failed for range: " << range.startBlock << " - " << range.endBlock << std::endl;
+                    err << "Read Checksum: " << checksumGetString(&checksum) << std::endl;
+                    err << "Expected Checksum: " << range.checksum;
+                    throw std::string(err.str());
                 }
 
-                checksumUpdate(&checksum, buffer, buffer.size());
-
-                readSize += static_cast<size_t>(readData);
+                checksumDeinit(&checksum);
             }
-
-            if (!checksumFinish(&checksum)) {
-                throw std::string("Failed to compute SHA256 checksum");
-            }
-            if (checksumGetString(&checksum).compare(range.checksum) != 0) {
-                std::stringstream err;
-                err << "Read-back verification failed for range: " << range.startBlock << " - " << range.endBlock << std::endl;
-                err << "Read Checksum: " << checksumGetString(&checksum) << std::endl;
-                err << "Expected Checksum: " << range.checksum;
-                throw std::string(err.str());
-            }
-
-            checksumDeinit(&checksum);
         }
 
         std::cout << "Finished writing image to device: " << device << std::endl;
+        if (noVerify) {
+            std::cout << "Checksum verification skipped." << std::endl;
+        }
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
@@ -333,17 +340,46 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     return ret;
 }
 
-int main(int argc, const char *argv[]) {
-    if (argc < 2 || argc > 4) {
-        std::cerr << "Usage: " << argv[0] << " <image-file> [bmap-file] <target-device>" << std::endl;
-        return 1;
+static void printUsage(const char *progname) {
+    std::cerr << "Usage: " << progname << " "
+              << "[-hn] <image-file> <bmap-file> <target-device>" << std::endl;
+    std::cerr << std::endl;
+    std::cerr << "-n : Skip checksum verification" << std::endl;
+    std::cerr << "-h : Show this help and exit" << std::endl;
+}
+
+int main(int argc, char *argv[]) {
+    bool noVerify = false;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "hn")) != -1) {
+        switch (opt) {
+            case 'n':
+                noVerify = true;
+                break;
+            case 'h':
+                printUsage(argv[0]);
+                return 0;
+            default:
+                std::cerr << "Unknown option -" << static_cast<char>(opt) << std::endl;
+                printUsage(argv[0]);
+                return -1;
+        }
     }
-    std::string imageFile = argv[1];
+
+    if ((argc - optind) < 2 || (argc - optind) > 4) {
+        std::cerr << "Wrong number of args" << std::endl;
+        printUsage(argv[0]);
+        return -1;
+    }
+
+    std::string imageFile = argv[optind];
     std::string bmapFile;
     std::string device;
-    if (argc == 4) {
-        bmapFile = argv[2];
-        device   = argv[3];
+
+    if ((argc - optind) == 3) {
+        bmapFile = argv[optind + 1];
+        device = argv[optind + 2];
     } else {
         size_t pos = imageFile.find_last_of('.');
         if (pos != std::string::npos) {
@@ -357,7 +393,7 @@ int main(int argc, const char *argv[]) {
             std::cerr << "Error: bmap file not provided and default bmap file " << bmapFile << " does not exist." << std::endl;
             return 1;
         }
-        device = argv[2];
+        device = argv[optind + 1];
     }
 
     if (std::strlen(GIT_VERSION) > 0) {
@@ -376,7 +412,7 @@ int main(int argc, const char *argv[]) {
         std::cerr << "Failed to parse file: " << bmapFile << std::endl;
         return 1;
     }
-    int ret = BmapWriteImage(imageFile, bmap, device);
+    int ret = BmapWriteImage(imageFile, bmap, device, noVerify);
     if (ret != 0) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
         return ret;
