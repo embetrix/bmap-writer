@@ -243,14 +243,31 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <image-file> <bmap-file> <target-device>" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <image-file> [bmap-file] <target-device>" << std::endl;
         return 1;
     }
-
     std::string imageFile = argv[1];
-    std::string bmapFile = argv[2];
-    std::string device = argv[3];
+    std::string bmapFile;
+    std::string device;
+    if (argc == 4) {
+        bmapFile = argv[2];
+        device   = argv[3];
+    } else {
+        size_t pos = imageFile.find_last_of('.');
+        if (pos != std::string::npos) {
+            bmapFile = imageFile.substr(0, pos) + ".bmap";
+        } else {
+            bmapFile = imageFile + ".bmap";
+        }
+        std::cout << "Using default bmap file: " << bmapFile << std::endl;
+        std::ifstream fileCheck(bmapFile);
+        if (!fileCheck) {
+            std::cerr << "Error: bmap file not provided and default bmap file " << bmapFile << " does not exist." << std::endl;
+            return 1;
+        }
+        device = argv[2];
+    }
 
     std::cout << "Starting bmap writer..." << std::endl;
     if (isDeviceMounted(device)) {
