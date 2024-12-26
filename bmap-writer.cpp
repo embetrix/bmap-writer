@@ -243,7 +243,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 2) {
+    if (argc < 2 || argc > 4) {
         std::cerr << "Usage: " << argv[0] << " <image-file> [bmap-file] <target-device>" << std::endl;
         return 1;
     }
