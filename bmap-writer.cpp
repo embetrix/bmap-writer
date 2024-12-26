@@ -113,24 +113,6 @@ bool isDeviceMounted(const std::string &device) {
     return false;
 }
 
-void printBufferHex(const char *buffer, size_t size) {
-#ifdef DEBUG
-    for (size_t i = 0; i < size; ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (unsigned int)(unsigned char)buffer[i];
-        if ((i + 1) % 16 == 0) {
-            std::cout << std::endl;
-        } else {
-            std::cout << " ";
-        }
-    }
-    std::cout << std::endl;
-#else
-    (void)buffer;
-    (void)size;
-    return;
-#endif
-}
-
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
     static const size_t read_block_size = 16384;
     struct archive *a = nullptr;
@@ -140,7 +122,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     try {
         size_t decHead = 0;
 
-        dev_fd = open(device.c_str(), O_WRONLY | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
+        dev_fd = open(device.c_str(), O_RDWR | O_CREAT | O_SYNC, S_IRUSR | S_IWUSR);
         if (dev_fd < 0) {
             throw std::string("Unable to open or create target device");
         }
@@ -216,24 +198,29 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 decHead += chunkSize;
             }
 
+            if (pwrite(dev_fd, buffer.data(), outBytes, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
+                throw std::string("Write to device failed");
+            }
+
+            // Read back the written data and verify its checksum
+            std::fill(buffer.begin(), buffer.end(), 0);
+            if (pread(dev_fd, buffer.data(), bufferSize, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
+                throw std::string("Read back from device failed");
+            }
+
             // Compute and verify the checksum
             std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
             if (!SHA256(reinterpret_cast<const unsigned char *>(buffer.data()), outBytes, hash.data())) {
                 throw std::string("Failed to compute SHA256 checksum");
             }
-            if (convertHashToHexString(hash) != range.checksum) {
+            if (convertHashToHexString(hash).compare(range.checksum) != 0) {
                 std::stringstream err;
-                err << "Checksum verification failed for range: " << range.range << std::endl;
-                err << "Computed Checksum: " << convertHashToHexString(hash) << std::endl;
+                err << "Read-back verification failed for range: " << range.range << std::endl;
+                err << "Read Checksum: " << convertHashToHexString(hash) << std::endl;
                 err << "Expected Checksum: " << range.checksum;
-                //std::cerr << "Buffer content (hex):" << std::endl;
-                printBufferHex(buffer.data(), outBytes);
                 throw std::string(err.str());
             }
 
-            if (pwrite(dev_fd, buffer.data(), outBytes, static_cast<off_t>(startBlock * bmap.blockSize)) < 0) {
-                throw std::string("Write to device failed");
-            }
         }
 
         if (fsync(dev_fd) != 0) {
