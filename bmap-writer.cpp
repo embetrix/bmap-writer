@@ -37,6 +37,8 @@
 #include <openssl/sha.h>
 #include <archive.h>
 
+#define KB 1024
+
 struct range_t {
     std::string checksum;
     std::string range;
@@ -111,7 +113,7 @@ bool isDeviceMounted(const std::string &device) {
 }
 
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device) {
-    static const size_t read_block_size = 16384;
+    static const size_t read_block_size = 16*KB;
     struct archive *a = nullptr;
     int dev_fd = -1;
     int ret = 0;
