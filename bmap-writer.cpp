@@ -300,7 +300,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
 static void printUsage(const char *progname) {
     std::cerr << "Usage: " << progname << " "
-              << "[-hvn] <image-file> <bmap-file> <target-device>" << std::endl;
+              << "[-hvn] <image-file> [bmap-file] <target-device>" << std::endl;
     std::cerr << std::endl;
     std::cerr << "-n : Skip checksum verification" << std::endl;
     std::cerr << "-v : Show version" << std::endl;
