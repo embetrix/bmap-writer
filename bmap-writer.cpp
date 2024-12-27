@@ -37,9 +37,9 @@
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#include <openssl/evp.h>
 #include <archive.h>
 
+#include "sha256.h"
 
 struct range_t {
     std::string checksum;
@@ -50,54 +50,6 @@ struct range_t {
 struct bmap_t {
     std::vector<range_t> ranges;
     size_t blockSize;
-};
-
-struct checksum_t {
-    EVP_MD_CTX *mdctx;
-    unsigned char checksum[EVP_MAX_MD_SIZE];
-    unsigned int checksum_len;
-};
-
-static void checksumDeinit(struct checksum_t* checksum)
-{
-    if (checksum->mdctx) {
-        EVP_MD_CTX_free(checksum->mdctx);
-        checksum->mdctx = nullptr;
-    }
-}
-
-static bool checksumInit(struct checksum_t* checksum)
-{
-    int success = false;
-
-    checksum->checksum_len = 0;
-    checksum->mdctx = EVP_MD_CTX_new();
-    if (checksum->mdctx != nullptr) {
-        int ret = EVP_DigestInit_ex(checksum->mdctx, EVP_sha256(), nullptr);
-        success = (ret == 1);
-    }
-
-    return success;
-}
-
-static void checksumUpdate(struct checksum_t* checksum, const std::vector<char>& buffer, size_t size)
-{
-    EVP_DigestUpdate(checksum->mdctx, buffer.data(), size);
-}
-
-static int checksumFinish(struct checksum_t* checksum)
-{
-    int ret = EVP_DigestFinal_ex(checksum->mdctx, checksum->checksum, &checksum->checksum_len);
-    return (ret == 1);
-}
-
-static std::string checksumGetString(struct checksum_t* checksum) {
-    std::ostringstream output;
-    output << std::hex;
-    for (unsigned int i = 0; i < checksum->checksum_len; ++i) {
-        output << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(checksum->checksum[i]);
-    }
-    return output.str();
 };
 
 bmap_t parseBMap(const std::string &filename) {
@@ -174,7 +126,7 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
 
 int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
-    checksum_t checksum;
+    SHA256Ctx sha256Ctx = {};
     int dev_fd = -1;
     int ret = 0;
 
@@ -224,12 +176,6 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             size_t maxBufferSize = 0;
             size_t writtenSize = 0;
             bool endOfFile = false;
-
-            if (!noVerify) {
-                if (!checksumInit(&checksum)) {
-                    throw std::string("Failed to init checksum engine");
-                }
-            }
 
             if (getFreeMemory(&maxBufferSize, 2) < 0) {
                 throw std::string("Failed to get free memory");
@@ -281,12 +227,18 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                     throw std::string("Write to device failed");
                 }
 
+                if (!noVerify) {
+                    sha256Update(sha256Ctx, std::string(buffer.data(), outBytes));
+                }
+
                 writtenSize += outBytes;
             }
 
             if (!noVerify) {
                 // Read back written data and compute checksum on it.
                 size_t readSize = 0;
+                SHA256Ctx verifySha256Ctx = {};
+
                 while (readSize < writtenSize) {
                     size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;
                     if (bufferSize > (writtenSize - readSize)) {
@@ -300,22 +252,20 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                         throw std::string("Failed to re-read from device: ") + std::to_string(readData);
                     }
 
-                    checksumUpdate(&checksum, buffer, buffer.size());
+                    sha256Update(verifySha256Ctx, std::string(buffer.data(), buffer.size()));
 
                     readSize += static_cast<size_t>(readData);
                 }
 
-                if (!checksumFinish(&checksum)) {
-                    throw std::string("Failed to compute SHA256 checksum");
-                } else if (checksumGetString(&checksum).compare(range.checksum) != 0) {
+                std::string computedChecksum = sha256Finalize(verifySha256Ctx);
+
+                if (computedChecksum.compare(range.checksum) != 0) {
                     std::stringstream err;
                     err << "Read-back verification failed for range: " << range.startBlock << " - " << range.endBlock << std::endl;
-                    err << "Read Checksum: " << checksumGetString(&checksum) << std::endl;
+                    err << "Read Checksum: " << computedChecksum << std::endl;
                     err << "Expected Checksum: " << range.checksum;
                     throw std::string(err.str());
                 }
-
-                checksumDeinit(&checksum);
             }
         }
 

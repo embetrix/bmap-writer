@@ -15,13 +15,6 @@ else()
     message(FATAL_ERROR "libxml2 not found")
 endif()
 
-# Find OpenSSL
-find_package(OpenSSL REQUIRED)
-if (OPENSSL_FOUND)
-    include_directories(${OPENSSL_INCLUDE_DIR})
-else()
-    message(FATAL_ERROR "OpenSSL not found")
-endif()
 
 # Find libarchive
 find_package(LibArchive REQUIRED)
@@ -41,15 +34,17 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_compile_definitions(READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE})
 add_compile_definitions(GIT_VERSION="${GIT_VERSION}")
 
 # Add the executable
-add_executable(bmap-writer bmap-writer.cpp)
+add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${OPENSSL_LIBRARIES} ${LibArchive_LIBRARIES})
+target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${LibArchive_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
