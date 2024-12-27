@@ -8,6 +8,8 @@ if [ ! -f test.img ]; then
     dd if=/dev/urandom of=test.img bs=1M count=2 seek=12 conv=notrunc  > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=1M count=5 seek=16 conv=notrunc  > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=4k count=1 seek=131072 conv=notrunc  > /dev/null 2>&1
+    dd if=/dev/zero of=test.img bs=1M count=5 seek=540 conv=notrunc     > /dev/null 2>&1
+    dd if=/dev/urandom of=test.img bs=1M count=3 seek=540 conv=notrunc  > /dev/null 2>&1
 fi
 
 if [ ! -f test.img.tar ]; then
