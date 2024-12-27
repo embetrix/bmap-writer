@@ -342,9 +342,10 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
 static void printUsage(const char *progname) {
     std::cerr << "Usage: " << progname << " "
-              << "[-hn] <image-file> <bmap-file> <target-device>" << std::endl;
+              << "[-hvn] <image-file> <bmap-file> <target-device>" << std::endl;
     std::cerr << std::endl;
     std::cerr << "-n : Skip checksum verification" << std::endl;
+    std::cerr << "-v : Show version" << std::endl;
     std::cerr << "-h : Show this help and exit" << std::endl;
 }
 
@@ -352,13 +353,18 @@ int main(int argc, char *argv[]) {
     bool noVerify = false;
     int opt;
 
-    while ((opt = getopt(argc, argv, "hn")) != -1) {
+    while ((opt = getopt(argc, argv, "hnv")) != -1) {
         switch (opt) {
             case 'n':
                 noVerify = true;
                 break;
             case 'h':
                 printUsage(argv[0]);
+                return 0;
+            case 'v':
+                if (std::strlen(GIT_VERSION) > 0) {
+                    std::cout << "Version: " << GIT_VERSION  << std::endl;
+                }
                 return 0;
             default:
                 std::cerr << "Unknown option -" << static_cast<char>(opt) << std::endl;
