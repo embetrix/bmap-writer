@@ -167,6 +167,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
             throw std::string("Failed to read archive header: ") + std::string(archive_error_string(a));
         }
 
+        size_t totalWrittenSize = 0;
         for (const auto &range : bmap.ranges) {
             //std::cout << "Processing Range: startBlock=" << range.startBlock << ", endBlock=" << range.endBlock << std::endl;
             const size_t outStart = range.startBlock * bmap.blockSize;
@@ -232,6 +233,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 }
 
                 writtenSize += outBytes;
+                totalWrittenSize += outBytes;
             }
 
             if (!noVerify) {
@@ -274,7 +276,11 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
-        std::cout << "Finished writing image to device: " << device << " in " << std::fixed << std::setprecision(2) << elapsed.count() << " seconds." << std::endl;
+        double speed = static_cast<double>(totalWrittenSize) / elapsed.count() / (1024 * 1024); // Speed in MB/s
+        std::cout << "Finished writing image to device: " << device
+              << " time: " << std::fixed << std::setprecision(2)
+              << elapsed.count() << "s speed: " << std::fixed << std::setprecision(2)
+              << speed << " MB/s" << std::endl;
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
