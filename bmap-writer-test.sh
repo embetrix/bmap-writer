@@ -97,3 +97,7 @@ cmp test.img.out test.zst.img.out
 echo "## Write the file with bmap-writer and zstd"
 ./bmap-writer test.img.zst test.zst.img.out
 cmp test.img.out test.zst.img.out
+
+echo "## Write the file with bmap-writer and zstd (skip checksum)"
+./bmap-writer -n test.img.zst test.zst.img.out
+cmp test.img.out test.zst.img.out
