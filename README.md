@@ -1,7 +1,7 @@
 
 # bmap-writer
 
-![pipeline status](https://github.com/embetrix/bmap-writer/actions/workflows/cmake-single-platform.yml/badge.svg)
+[![CI](https://github.com/embetrix/bmap-writer/actions/workflows/integration.yml/badge.svg)](https://github.com/embetrix/bmap-writer/actions/workflows/integration.yml)
 
 `bmap-writer` is a command-line utility designed to efficiently write disk images to storage devices using block mapping (BMAP). 
 It serves as a lightweight alternative to the Yocto BMAP tool, specifically for embedded systems. 
