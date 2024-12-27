@@ -129,7 +129,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
     SHA256Ctx sha256Ctx = {};
     int dev_fd = -1;
     int ret = 0;
-
+    auto start = std::chrono::high_resolution_clock::now();
     try {
         size_t decHead = 0;
 
@@ -268,11 +268,13 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
                 }
             }
         }
-
-        std::cout << "Finished writing image to device: " << device << std::endl;
         if (noVerify) {
-            std::cout << "Checksum verification skipped." << std::endl;
+            std::cout << "Checksum verification skipped" << std::endl;
         }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Finished writing image to device: " << device << " in " << std::fixed << std::setprecision(2) << elapsed.count() << " seconds." << std::endl;
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
@@ -362,7 +364,6 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
         return 1;
     }
-    auto start = std::chrono::high_resolution_clock::now();
     bmap_t bmap = parseBMap(bmapFile);
     if (bmap.blockSize == 0 || bmap.ranges.empty()) {
         std::cerr << "Failed to parse file: " << bmapFile << std::endl;
@@ -373,9 +374,5 @@ int main(int argc, char *argv[]) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
         return ret;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-    std::cout << "Process completed in " << std::fixed << std::setprecision(2) << elapsed.count() << " seconds." << std::endl;
-
     return 0;
 }
