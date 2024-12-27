@@ -29,6 +29,7 @@ bmap-writer [-n] <image-file> [bmap-file] <target-device>
 ```
 
 * `-n`: Skip checksum verification
+* `bmap-file`: Optional. If not provided, it will be searched in the same path as the input `image-file`.
 
 ## Yocto Integration
 
