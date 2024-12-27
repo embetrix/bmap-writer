@@ -22,6 +22,43 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 1. Create a BMAP file for your disk image using `bmaptool`.
 2. Use `bmap-writer` to write the image to your target device, specifying the BMAP file for efficient block mapping.
 
+## Requirements
+
+- C++ compiler
+- CMake
+- Libarchive
+- Libxml2
+
+## Build and Installation
+
+### Install Dependencies
+
+#### Ubuntu
+
+```sh
+sudo apt-get update
+sudo apt-get install -y libarchive-dev libxml2-dev
+```
+
+## Build
+
+```sh
+cmake .
+make
+```
+
+## Test
+
+```sh
+ctest -V
+```
+
+## Install
+
+```sh
+sudo make install
+```
+
 ## Usage
 
 ```sh
