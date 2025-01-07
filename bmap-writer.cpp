@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
  * (C) Copyright 2024
  * Embetrix Embedded Systems Solutions, ayoub.zaki@embetrix.com
@@ -299,12 +300,12 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 }
 
 static void printUsage(const char *progname) {
-    std::cerr << "Usage: " << progname << " "
+    std::cout << "Usage: " << progname << " "
               << "[-hvn] <image-file> [bmap-file] <target-device>" << std::endl;
-    std::cerr << std::endl;
-    std::cerr << "-n : Skip checksum verification" << std::endl;
-    std::cerr << "-v : Show version" << std::endl;
-    std::cerr << "-h : Show this help and exit" << std::endl;
+    std::cout << std::endl;
+    std::cout << "-n : Skip checksum verification" << std::endl;
+    std::cout << "-v : Show version" << std::endl;
+    std::cout << "-h : Show this help and exit" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -355,7 +356,7 @@ int main(int argc, char *argv[]) {
         std::ifstream fileCheck(bmapFile);
         if (!fileCheck) {
             std::cerr << "Error: bmap file not provided and default bmap file " << bmapFile << " does not exist." << std::endl;
-            return 1;
+            return -1;
         }
         device = argv[optind + 1];
     }
@@ -368,7 +369,7 @@ int main(int argc, char *argv[]) {
 
     if (isDeviceMounted(device)) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
-        return 1;
+        return -1;
     }
     bmap_t bmap = parseBMap(bmapFile);
     if (bmap.blockSize == 0 || bmap.ranges.empty()) {
