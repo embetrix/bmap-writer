@@ -7,12 +7,15 @@ project(bmap-writer)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Find libxml2
-find_package(LibXml2 REQUIRED)
-if (LIBXML2_FOUND)
-    include_directories(${LIBXML2_INCLUDE_DIR})
+# Find pkgconfig
+find_package(PkgConfig REQUIRED)
+
+# Find TinyXML-2
+pkg_check_modules(TINYXML2 REQUIRED tinyxml2)
+if (TINYXML2_FOUND)
+    include_directories(${TINYXML2_INCLUDE_DIR})
 else()
-    message(FATAL_ERROR "libxml2 not found")
+    message(FATAL_ERROR "tinyxml2 library not found")
 endif()
 
 
@@ -44,7 +47,7 @@ add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${LIBXML2_LIBRARIES} ${LibArchive_LIBRARIES})
+target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LibArchive_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
