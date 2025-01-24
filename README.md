@@ -27,7 +27,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 - C++ compiler
 - CMake
 - Libarchive
-- Libxml2
+- TinyXML-2
 
 ## Build and Installation
 
@@ -37,7 +37,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y libarchive-dev libxml2-dev
+sudo apt-get install -y libarchive-dev libtinyxml2-dev
 ```
 
 ## Build

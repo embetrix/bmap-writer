@@ -36,9 +36,8 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
 #include <archive.h>
+#include <tinyxml2.h>
 
 #include "sha256.h"
 
@@ -53,50 +52,82 @@ struct bmap_t {
     size_t blockSize;
 };
 
-bmap_t parseBMap(const std::string &filename) {
-    bmap_t bmapData = {};
-    bmapData.blockSize = 0;
+int parseBMap(const std::string &filename, bmap_t& bmapData) {
+    int ret = 0;
 
-    xmlDocPtr doc = xmlReadFile(filename.c_str(), NULL, 0);
-    if (doc == NULL) {
-        return bmapData;
-    }
+    try {
+        tinyxml2::XMLDocument doc;
+        tinyxml2::XMLError err;
 
-    xmlNodePtr root_element = xmlDocGetRootElement(doc);
-    for (xmlNodePtr node = root_element->children; node; node = node->next) {
-        if (node->type == XML_ELEMENT_NODE) {
-            if (strcmp(reinterpret_cast<const char *>(node->name), "BlockSize") == 0) {
-                xmlChar *blockSizeStr = xmlNodeGetContent(node);
-                bmapData.blockSize = static_cast<size_t>(std::stoul(reinterpret_cast<const char *>(blockSizeStr)));
-                xmlFree(blockSizeStr);
-                //std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
-            } else if (strcmp(reinterpret_cast<const char *>(node->name), "BlockMap") == 0) {
-                for (xmlNodePtr rangeNode = node->children; rangeNode; rangeNode = rangeNode->next) {
-                    if (rangeNode->type == XML_ELEMENT_NODE && strcmp(reinterpret_cast<const char *>(rangeNode->name), "Range") == 0) {
-                        xmlChar *checksum = xmlGetProp(rangeNode, reinterpret_cast<const xmlChar *>("chksum"));
-                        xmlChar *range = xmlNodeGetContent(rangeNode);
+        err = doc.LoadFile(filename.c_str());
+        if (err != tinyxml2::XML_SUCCESS) {
+            throw std::string("Failed to load BMAP file");
+        }
 
-                        range_t r;
-                        r.checksum = reinterpret_cast<const char *>(checksum);
+        tinyxml2::XMLElement * p_root = doc.RootElement();
 
-                        if (sscanf(reinterpret_cast<const char *>(range), "%zu-%zu", &r.startBlock, &r.endBlock) == 1) {
-                            r.endBlock = r.startBlock;  // Handle single block range
-                        }
+        // Check if the provided file is a valid BMAP
+        if (strcmp(reinterpret_cast<const char *>(p_root->Name()), "bmap") != 0) {
+            throw std::string("BMAP file is invalid");
+        }
 
-                        bmapData.ranges.push_back(r);
-                        //std::cout << "Parsed Range: checksum=" << r.checksum << ", range=" << r.range << std::endl;
-                        xmlFree(checksum);
-                        xmlFree(range);
-                    }
+        // Parse image information
+        tinyxml2::XMLElement * p_data;
+
+        p_data = p_root->FirstChildElement("BlockSize");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: BlockSize not found");
+        } else {
+            bmapData.blockSize = static_cast<size_t>(std::stoul(p_data->GetText()));
+            //std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
+        }
+
+        p_data = p_root->FirstChildElement("BlockMap");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: BlockMap not found");
+        } else {
+            tinyxml2::XMLElement * p_range = p_data->FirstChildElement("Range");
+            while (p_range != nullptr) {
+                range_t r;
+
+                const char *val = p_range->GetText();
+                if (val == nullptr) {
+                    throw std::string("BMAP: found an empty range");
                 }
+
+                const char *chksum = p_range->Attribute("chksum");
+                if (chksum == nullptr) {
+                    throw std::string("BMAP: following range has no checksum: ") + std::string(val);
+                }
+
+                int parseResult = std::sscanf(val, "%zu-%zu", &r.startBlock, &r.endBlock);
+                switch (parseResult) {
+                case 2:
+                    // Multiple blocks range, nothing to do
+                    break;
+                case 1:
+                    // Handle single block range
+                    r.endBlock = r.startBlock;
+                    break;
+                default:
+                    throw std::string("BMAP: invalid range: ") + std::string(val);
+                }
+
+                r.checksum = std::string(chksum);
+
+                //std::cout << "Parsed Range: checksum=" << r.checksum << ", range=" << r.startBlock << "-" << r.endBlock << std::endl;
+
+                bmapData.ranges.push_back(r);
+
+                p_range = p_range->NextSiblingElement("Range");
             }
         }
+    } catch (const std::string& err) {
+        std::cerr << err << std::endl;
+        ret = -1;
     }
 
-    xmlFreeDoc(doc);
-    xmlCleanupParser();
-
-    return bmapData;
+    return ret;
 }
 
 bool isDeviceMounted(const std::string &device) {
@@ -371,12 +402,15 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
         return -1;
     }
-    bmap_t bmap = parseBMap(bmapFile);
-    if (bmap.blockSize == 0 || bmap.ranges.empty()) {
-        std::cerr << "Failed to parse file: " << bmapFile << std::endl;
+
+    bmap_t bmap;
+    int ret = parseBMap(bmapFile, bmap);
+    if (ret != 0) {
+        std::cerr << "Failed to parse BMAP file: " << bmapFile << std::endl;
         return 1;
     }
-    int ret = BmapWriteImage(imageFile, bmap, device, noVerify);
+
+    ret = BmapWriteImage(imageFile, bmap, device, noVerify);
     if (ret != 0) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
         return ret;
