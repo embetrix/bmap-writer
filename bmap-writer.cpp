@@ -196,7 +196,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         struct archive_entry *ae;
         r = archive_read_next_header(a, &ae);
         if (r != ARCHIVE_OK) {
-            throw std::string("Failed to read archive header: ") + std::string(archive_error_string(a));
+            const char * aerr = archive_error_string(a);
+            throw std::string("Failed to read archive header: ") + ((aerr != nullptr) ? std::string(aerr) : "unknown error");
         }
 
         size_t totalWrittenSize = 0;
