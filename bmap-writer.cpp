@@ -156,7 +156,7 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
     return ret;
 }
 
-int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device, bool noVerify) {
+int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
     SHA256Ctx sha256Ctx = {};
     int dev_fd = -1;
@@ -179,7 +179,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         archive_read_support_format_raw(a);
         archive_read_support_format_tar(a);
 
-        int r = archive_read_open_filename(a, imageFile.c_str(), READ_BLK_SIZE);
+        int r = archive_read_open_fd(a, fd, READ_BLK_SIZE);
         if (r != ARCHIVE_OK) {
             throw std::string("Failed to open archive: ") + std::string(archive_error_string(a));
         } else {
@@ -411,10 +411,18 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    ret = BmapWriteImage(imageFile, bmap, device, noVerify);
+    int image_fd = ::open(imageFile.c_str(), O_RDONLY);
+    if (image_fd < 0) {
+        std::cerr << "Failed to open image file: " << imageFile << std::endl;
+        return 1;
+    }
+
+    ret = BmapWriteImage(image_fd, bmap, device, noVerify);
     if (ret != 0) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
-        return ret;
     }
-    return 0;
+
+    close(image_fd);
+
+    return ret;
 }
