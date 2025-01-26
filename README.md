@@ -62,11 +62,38 @@ sudo make install
 ## Usage
 
 ```sh
-bmap-writer [-n] <image-file> [bmap-file] <target-device>
+bmap-writer [-hvn] <image-file> [<bmap-file>] <target-device>
 ```
 
-* `-n`: Skip checksum verification
-* `bmap-file`: Optional. If not provided, it will be searched in the same path as the input `image-file`.
+* `-n` : Skip checksum verification
+* `-v` : Show version
+* `-h` : Show this help and exit
+* `<bmap-file>`: Optional. If not provided, it will be searched in the same path as the input `<image-file>`.
+
+To use stdin as source of the image file, `<image-file>` shall be equal to `-` and `<bmap-file>` shall be present.
+
+### Streaming mode
+
+Streaming mode, i.e. writing data while it's being received, is supported through piping from external applications.
+The BMAP file shall be present and available before the data streaming is started.
+
+Some examples are presented below:
+
+* Download from an HTTP server using `wget`:
+```bash
+wget -O - http://myserver.com/image.bmap > image.bmap
+wget -O - http://myserver.com/image.gz | bmap-writer - image.bmap /dev/sdX
+```
+* Download from a FTP server using `wget`:
+```bash
+wget -O - ftp://user@myserver.com:2121/image.bmap > image.bmap
+wget -O - ftp://user@myserver.com:2121/image.gz | bmap-writer - image.bmap /dev/sdX
+```
+* Download from a SFTP host using `curl`:
+```bash
+curl -u user:password sftp://hostname/path/to/image.bmap > image.bmap
+curl -u user:password sftp://hostname/path/to/image.gz | bmap-writer - image.bmap /dev/sdX
+```
 
 ## Yocto Integration
 

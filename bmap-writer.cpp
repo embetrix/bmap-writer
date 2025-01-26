@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <string>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <cerrno>
 
@@ -128,6 +129,19 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
     }
 
     return ret;
+}
+
+bool isPipe(int fd) {
+    struct stat statbuf;
+    bool pipe = false;
+
+    if (::fstat(fd, &statbuf) != 0) {
+        std::cerr << "Failed to stat fd for pipe detection: " << strerror(errno) << std::endl;
+    } else if (S_ISFIFO(statbuf.st_mode)) {
+        pipe = true;
+    }
+
+    return pipe;
 }
 
 bool isDeviceMounted(const std::string &device) {
@@ -333,11 +347,14 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
 
 static void printUsage(const char *progname) {
     std::cout << "Usage: " << progname << " "
-              << "[-hvn] <image-file> [bmap-file] <target-device>" << std::endl;
+              << "[-hvn] <image-file> [<bmap-file>] <target-device>" << std::endl;
     std::cout << std::endl;
     std::cout << "-n : Skip checksum verification" << std::endl;
     std::cout << "-v : Show version" << std::endl;
     std::cout << "-h : Show this help and exit" << std::endl;
+    std::cout << std::endl;
+    std::cout << "To use stdin as source of the image file, <image-file> shall be equal\n"
+              << "to - and <bmap-file> shall be present." << std::endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -373,10 +390,19 @@ int main(int argc, char *argv[]) {
     std::string imageFile = argv[optind];
     std::string bmapFile;
     std::string device;
+    int image_fd = -1;
 
     if ((argc - optind) == 3) {
         bmapFile = argv[optind + 1];
         device = argv[optind + 2];
+
+        if (imageFile.compare("-") == 0) {
+            image_fd = ::fileno(stdin);
+            if (!isPipe(image_fd)) {
+                std::cerr << "Error: stdin specified as input but it's not a pipe." << std::endl;
+                return -1;
+            }
+        }
     } else {
         size_t pos = imageFile.find_last_of('.');
         if (pos != std::string::npos) {
@@ -411,10 +437,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int image_fd = ::open(imageFile.c_str(), O_RDONLY);
     if (image_fd < 0) {
-        std::cerr << "Failed to open image file: " << imageFile << std::endl;
-        return 1;
+        image_fd = ::open(imageFile.c_str(), O_RDONLY);
+        if (image_fd < 0) {
+            std::cerr << "Failed to open image file: " << imageFile << std::endl;
+            return 1;
+        }
     }
 
     ret = BmapWriteImage(image_fd, bmap, device, noVerify);
