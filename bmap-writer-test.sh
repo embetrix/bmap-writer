@@ -92,14 +92,30 @@ echo "## Write the file with bmap-writer and xz"
 ./bmap-writer test.img.xz test.img.bmap test.xz.img.out
 cmp test.img.out test.xz.img.out
 
+echo "## Write the file with bmap-writer and external xz (pipe mode)"
+xzcat test.img.xz | ./bmap-writer - test.img.bmap test2.xz.img.out
+cmp test.img.out test2.xz.img.out
+
 echo "## Write the file with bmap-writer and zstd"
 ./bmap-writer test.img.zst test.img.bmap test.zst.img.out
 cmp test.img.out test.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd"
-./bmap-writer test.img.zst test.zst.img.out
-cmp test.img.out test.zst.img.out
+./bmap-writer test.img.zst test2.zst.img.out
+cmp test.img.out test2.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd (skip checksum)"
-./bmap-writer -n test.img.zst test.zst.img.out
-cmp test.img.out test.zst.img.out
+./bmap-writer -n test.img.zst test3.zst.img.out
+cmp test.img.out test3.zst.img.out
+
+echo "## Write the file with bmap-writer and zstd (pipe mode)"
+cat test.img.zst | ./bmap-writer - test.img.bmap test4.zst.img.out
+cmp test.img.out test4.zst.img.out
+
+echo "## Write the file with bmap-writer and zstd from HTTP server"
+python3 -m http.server -d $(pwd) -b 127.0.0.1 8987 &
+SERVER_PID=$!
+sleep 2
+wget -O - http://127.0.0.1:8987/test.img.zst | ./bmap-writer - test.img.bmap test5.zst.img.out
+cmp test.img.out test5.zst.img.out
+kill $SERVER_PID

@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <string>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <cerrno>
 
@@ -130,6 +131,19 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
     return ret;
 }
 
+bool isPipe(int fd) {
+    struct stat statbuf;
+    bool pipe = false;
+
+    if (::fstat(fd, &statbuf) != 0) {
+        std::cerr << "Failed to stat fd for pipe detection: " << strerror(errno) << std::endl;
+    } else if (S_ISFIFO(statbuf.st_mode)) {
+        pipe = true;
+    }
+
+    return pipe;
+}
+
 bool isDeviceMounted(const std::string &device) {
     std::ifstream mounts("/proc/mounts");
     std::string line;
@@ -156,7 +170,7 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
     return ret;
 }
 
-int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::string &device, bool noVerify) {
+int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
     SHA256Ctx sha256Ctx = {};
     int dev_fd = -1;
@@ -179,7 +193,7 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         archive_read_support_format_raw(a);
         archive_read_support_format_tar(a);
 
-        int r = archive_read_open_filename(a, imageFile.c_str(), READ_BLK_SIZE);
+        int r = archive_read_open_fd(a, fd, READ_BLK_SIZE);
         if (r != ARCHIVE_OK) {
             throw std::string("Failed to open archive: ") + std::string(archive_error_string(a));
         } else {
@@ -196,7 +210,8 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
         struct archive_entry *ae;
         r = archive_read_next_header(a, &ae);
         if (r != ARCHIVE_OK) {
-            throw std::string("Failed to read archive header: ") + std::string(archive_error_string(a));
+            const char * aerr = archive_error_string(a);
+            throw std::string("Failed to read archive header: ") + ((aerr != nullptr) ? std::string(aerr) : "unknown error");
         }
 
         size_t totalWrittenSize = 0;
@@ -332,11 +347,14 @@ int BmapWriteImage(const std::string &imageFile, const bmap_t &bmap, const std::
 
 static void printUsage(const char *progname) {
     std::cout << "Usage: " << progname << " "
-              << "[-hvn] <image-file> [bmap-file] <target-device>" << std::endl;
+              << "[-hvn] <image-file> [<bmap-file>] <target-device>" << std::endl;
     std::cout << std::endl;
     std::cout << "-n : Skip checksum verification" << std::endl;
     std::cout << "-v : Show version" << std::endl;
     std::cout << "-h : Show this help and exit" << std::endl;
+    std::cout << std::endl;
+    std::cout << "To use stdin as source of the image file, <image-file> shall be equal\n"
+              << "to - and <bmap-file> shall be present." << std::endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -372,10 +390,19 @@ int main(int argc, char *argv[]) {
     std::string imageFile = argv[optind];
     std::string bmapFile;
     std::string device;
+    int image_fd = -1;
 
     if ((argc - optind) == 3) {
         bmapFile = argv[optind + 1];
         device = argv[optind + 2];
+
+        if (imageFile.compare("-") == 0) {
+            image_fd = ::fileno(stdin);
+            if (!isPipe(image_fd)) {
+                std::cerr << "Error: stdin specified as input but it's not a pipe." << std::endl;
+                return -1;
+            }
+        }
     } else {
         size_t pos = imageFile.find_last_of('.');
         if (pos != std::string::npos) {
@@ -410,10 +437,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    ret = BmapWriteImage(imageFile, bmap, device, noVerify);
+    if (image_fd < 0) {
+        image_fd = ::open(imageFile.c_str(), O_RDONLY);
+        if (image_fd < 0) {
+            std::cerr << "Failed to open image file: " << imageFile << std::endl;
+            return 1;
+        }
+    }
+
+    ret = BmapWriteImage(image_fd, bmap, device, noVerify);
     if (ret != 0) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
-        return ret;
     }
-    return 0;
+
+    close(image_fd);
+
+    return ret;
 }
