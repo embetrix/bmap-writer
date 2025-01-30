@@ -442,7 +442,9 @@ int main(int argc, char *argv[]) {
         std::cerr << "Failed to write image to device: " << device << std::endl;
     }
 
-    close(image_fd);
+    if (image_fd >= 0) {
+        close(image_fd);
+    }
 
     return ret;
 }
