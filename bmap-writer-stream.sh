@@ -2,7 +2,7 @@
 
 export PATH=$PWD:$PATH
 
-IMAGE_URL=$(echo "$1" | grep -P '^(https?|s?ftp)://([\da-zA-Z\.-]+)(:\d+)?(/[^\s]*)?$' > /dev/null && echo "$1" || echo "")
+IMAGE_URL=$(echo "$1" | grep -P '^(https?|s?ftp)://([\w\-]+(:[\w\-]+)?@)?([\da-zA-Z\.-]+)(:\d+)?(/[^\s]*)?$' > /dev/null && echo "$1" || echo "")
 DEVICE=$2
 
 WGET=$(which wget)
