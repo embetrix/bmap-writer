@@ -95,7 +95,7 @@ curl -u user:password sftp://hostname/path/to/image.bmap > image.bmap
 curl -u user:password sftp://hostname/path/to/image.gz | bmap-writer - image.bmap /dev/sdX
 ```
 
-Note: the [stream-helper.sh](stream-helper.sh) script can be used for stream processing tasks.
+Note: the [bmap-writer-stream.sh](bmap-writer-stream.sh) script can be used for stream processing tasks.
  
 ## Yocto Integration
 

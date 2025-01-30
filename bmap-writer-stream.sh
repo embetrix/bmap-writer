@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 export PATH=$PWD:$PATH
 

@@ -118,6 +118,6 @@ echo "## Write the file with bmap-writer and zstd from HTTP server"
 python3 -m http.server -d $(pwd) -b 127.0.0.1 8987 &
 SERVER_PID=$!
 sleep 2
-stream-helper.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
+bmap-writer-stream.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
 cmp test.img.out test5.zst.img.out
 kill $SERVER_PID
