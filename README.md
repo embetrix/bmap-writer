@@ -95,6 +95,8 @@ curl -u user:password sftp://hostname/path/to/image.bmap > image.bmap
 curl -u user:password sftp://hostname/path/to/image.gz | bmap-writer - image.bmap /dev/sdX
 ```
 
+Note: the [stream-helper.sh](stream-helper.sh) script can be used for stream processing tasks.
+ 
 ## Yocto Integration
 
 `bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer/bmap-writer_git.bb).
