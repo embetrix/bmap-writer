@@ -24,6 +24,10 @@ BMAP_FILE=$(echo "$BMAP_URL" | sed 's/.*\///')
 BMAP_FILE="${BMAP_FILE}_"
 echo "Downloading $BMAP_URL to $BMAP_FILE"
 $WGET -q $BMAP_URL -O $BMAP_FILE
+if [ $? -ne 0 ]; then
+    echo "Failed to download $BMAP_URL"
+    exit 1
+fi
 echo "Streaming $IMAGE_URL to $DEVICE"
 $WGET -q $IMAGE_URL -O - | $BMAP_WRITER - $BMAP_FILE $DEVICE
 
