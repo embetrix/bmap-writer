@@ -54,8 +54,6 @@ struct bmap_t {
 };
 
 int parseBMap(const std::string &filename, bmap_t& bmapData) {
-    int ret = 0;
-
     try {
         tinyxml2::XMLDocument doc;
         tinyxml2::XMLError err;
@@ -125,10 +123,10 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
         }
     } catch (const std::string& err) {
         std::cerr << err << std::endl;
-        ret = -1;
+        return EXIT_FAILURE;
     }
 
-    return ret;
+    return EXIT_SUCCESS;
 }
 
 bool isPipe(int fd) {
@@ -173,7 +171,6 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
 int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
     int dev_fd = -1;
-    int ret = 0;
     auto start = std::chrono::high_resolution_clock::now();
     try {
         size_t decHead = 0;
@@ -326,7 +323,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
-        ret = -1;
+        return EXIT_FAILURE;
     }
 
     if (dev_fd >= 0) {
@@ -337,7 +334,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
         archive_read_free(a);
     }
 
-    return ret;
+    return EXIT_SUCCESS;
 }
 
 static void printUsage(const char *progname) {
@@ -363,23 +360,23 @@ int main(int argc, char *argv[]) {
                 break;
             case 'h':
                 printUsage(argv[0]);
-                return 0;
+                return EXIT_SUCCESS;
             case 'v':
                 if (std::strlen(GIT_VERSION) > 0) {
                     std::cout << "Version: " << GIT_VERSION  << std::endl;
                 }
-                return 0;
+                return EXIT_SUCCESS;
             default:
                 std::cerr << "Unknown option -" << static_cast<char>(opt) << std::endl;
                 printUsage(argv[0]);
-                return -1;
+                return EXIT_FAILURE;
         }
     }
 
     if ((argc - optind) < 2 || (argc - optind) > 4) {
         std::cerr << "Wrong number of args" << std::endl;
         printUsage(argv[0]);
-        return -1;
+        return EXIT_FAILURE;
     }
 
     std::string imageFile = argv[optind];
@@ -395,7 +392,7 @@ int main(int argc, char *argv[]) {
             image_fd = ::fileno(stdin);
             if (!isPipe(image_fd)) {
                 std::cerr << "Error: stdin specified as input but it's not a pipe." << std::endl;
-                return -1;
+                return EXIT_FAILURE;
             }
         }
     } else {
@@ -409,7 +406,7 @@ int main(int argc, char *argv[]) {
         std::ifstream fileCheck(bmapFile);
         if (!fileCheck) {
             std::cerr << "Error: bmap file not provided and default bmap file " << bmapFile << " does not exist." << std::endl;
-            return -1;
+            return EXIT_FAILURE;
         }
         device = argv[optind + 1];
     }
@@ -422,21 +419,21 @@ int main(int argc, char *argv[]) {
 
     if (isDeviceMounted(device)) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
 
     bmap_t bmap;
     int ret = parseBMap(bmapFile, bmap);
     if (ret != 0) {
         std::cerr << "Failed to parse BMAP file: " << bmapFile << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (image_fd < 0) {
         image_fd = ::open(imageFile.c_str(), O_RDONLY);
         if (image_fd < 0) {
             std::cerr << "Failed to open image file: " << imageFile << std::endl;
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
