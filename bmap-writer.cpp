@@ -172,7 +172,6 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
 
 int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
-    SHA256Ctx sha256Ctx = {};
     int dev_fd = -1;
     int ret = 0;
     auto start = std::chrono::high_resolution_clock::now();
@@ -273,10 +272,6 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
 
                 if (pwrite(dev_fd, buffer.data(), outBytes, writeOffset + static_cast<off_t>(writtenSize)) < 0) {
                     throw std::string("Write to device failed");
-                }
-
-                if (!noVerify) {
-                    sha256Update(sha256Ctx, std::string(buffer.data(), outBytes));
                 }
 
                 writtenSize += outBytes;
