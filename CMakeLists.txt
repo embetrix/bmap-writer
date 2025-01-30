@@ -51,6 +51,7 @@ target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LibArchive_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
+install(PROGRAMS bmap-writer-stream.sh DESTINATION bin RENAME bmap-writer-stream)
 
 # Enable testing
 enable_testing()
