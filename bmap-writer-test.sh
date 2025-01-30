@@ -2,6 +2,8 @@
 
 # This script tests the bmap-writer tool
 
+export PATH=$PWD:$PATH
+
 if [ ! -f test.img ]; then
     echo "## Create a file with random data"
     dd if=/dev/urandom of=test.img bs=1M count=10 > /dev/null 2>&1
@@ -61,61 +63,61 @@ echo "## Write the file with bmaptool as reference"
 bmaptool copy test.img test.img.out
 
 echo "## Write the file with bmap-writer"
-./bmap-writer test.img test.img.bmap test.none.img.out
+bmap-writer test.img test.img.bmap test.none.img.out
 cmp test.img.out test.none.img.out
 
 echo "## Write the file with bmap-writer and tar"
-./bmap-writer test.img.tar test.img.bmap test.tar.img.out
+bmap-writer test.img.tar test.img.bmap test.tar.img.out
 cmp test.img.out test.tar.img.out
 
 echo "## Write the file with bmap-writer and tar+gzip"
-./bmap-writer test.img.tar.gz test.img.bmap test.tar.gz.img.out
+bmap-writer test.img.tar.gz test.img.bmap test.tar.gz.img.out
 cmp test.img.out test.tar.gz.img.out
 
 echo "## Write the file with bmap-writer and bzip2"
-./bmap-writer test.img.bz2 test.img.bmap test.bz2.img.out
+bmap-writer test.img.bz2 test.img.bmap test.bz2.img.out
 cmp test.img.out test.bz2.img.out
 
 echo "## Write the file with bmap-writer and gzip"
-./bmap-writer test.img.gz test.img.bmap test.gz.img.out
+bmap-writer test.img.gz test.img.bmap test.gz.img.out
 cmp test.img.out test.gz.img.out
 
 echo "## Write the file with bmap-writer and lz4"
-./bmap-writer test.img.lz4 test.img.bmap test.lz4.img.out
+bmap-writer test.img.lz4 test.img.bmap test.lz4.img.out
 cmp test.img.out test.lz4.img.out
 
 echo "## Write the file with bmap-writer and lzo"
-./bmap-writer test.img.lzo test.img.bmap test.lzo.img.out
+bmap-writer test.img.lzo test.img.bmap test.lzo.img.out
 cmp test.img.out test.lzo.img.out
 
 echo "## Write the file with bmap-writer and xz"
-./bmap-writer test.img.xz test.img.bmap test.xz.img.out
+bmap-writer test.img.xz test.img.bmap test.xz.img.out
 cmp test.img.out test.xz.img.out
 
 echo "## Write the file with bmap-writer and external xz (pipe mode)"
-xzcat test.img.xz | ./bmap-writer - test.img.bmap test2.xz.img.out
+xzcat test.img.xz | bmap-writer - test.img.bmap test2.xz.img.out
 cmp test.img.out test2.xz.img.out
 
 echo "## Write the file with bmap-writer and zstd"
-./bmap-writer test.img.zst test.img.bmap test.zst.img.out
+bmap-writer test.img.zst test.img.bmap test.zst.img.out
 cmp test.img.out test.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd"
-./bmap-writer test.img.zst test2.zst.img.out
+bmap-writer test.img.zst test2.zst.img.out
 cmp test.img.out test2.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd (skip checksum)"
-./bmap-writer -n test.img.zst test3.zst.img.out
+bmap-writer -n test.img.zst test3.zst.img.out
 cmp test.img.out test3.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd (pipe mode)"
-cat test.img.zst | ./bmap-writer - test.img.bmap test4.zst.img.out
+cat test.img.zst | bmap-writer - test.img.bmap test4.zst.img.out
 cmp test.img.out test4.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd from HTTP server"
 python3 -m http.server -d $(pwd) -b 127.0.0.1 8987 &
 SERVER_PID=$!
 sleep 2
-./stream-helper.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
+stream-helper.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
 cmp test.img.out test5.zst.img.out
 kill $SERVER_PID
