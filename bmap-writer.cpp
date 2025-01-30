@@ -171,6 +171,7 @@ int getFreeMemory(size_t *memory, unsigned int divider = 1) {
 int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool noVerify) {
     struct archive *a = nullptr;
     int dev_fd = -1;
+    int ret = EXIT_SUCCESS;
     auto start = std::chrono::high_resolution_clock::now();
     try {
         size_t decHead = 0;
@@ -323,7 +324,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
     }
     catch (const std::string& err) {
         std::cerr << err << std::endl;
-        return EXIT_FAILURE;
+        ret =  EXIT_FAILURE;
     }
 
     if (dev_fd >= 0) {
@@ -334,7 +335,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
         archive_read_free(a);
     }
 
-    return EXIT_SUCCESS;
+    return ret;
 }
 
 static void printUsage(const char *progname) {
