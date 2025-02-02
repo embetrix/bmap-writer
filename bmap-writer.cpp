@@ -172,6 +172,46 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
     return EXIT_SUCCESS;
 }
 
+int checkBmap(const std::string &filename, const std::string& checksum) {
+    try {
+        std::ifstream file(filename);
+        std::string line;
+
+        if (!file.is_open()) {
+            throw std::string("Failed to open BMAP file");
+        } else {
+            SHA256Ctx sha256Ctx = {};
+
+            while (std::getline(file, line)) {
+                std::size_t found = line.find(checksum);
+                // The actual checksum of the BMAP file shall be replaced with a set of '0'
+                if (found != std::string::npos) {
+                    line = line.replace(found, checksum.size(), checksum.size(), '0');
+                }
+                // add the newline character not read by std::getline
+                line.push_back('\n');
+                sha256Update(sha256Ctx, line);
+            }
+
+            file.close();
+
+            std::string compChecksum = sha256Finalize(sha256Ctx);
+            if (compChecksum.compare(checksum) != 0) {
+                std::stringstream serr;
+                serr << "BMAP checksum invalid" << std::endl;
+                serr << "Computed Checksum: " << compChecksum << std::endl;
+                serr << "Expected Checksum: " << checksum;
+                throw std::string(serr.str());
+            }
+        }
+    } catch (const std::string& err) {
+        std::cerr << err << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
 bool isPipe(int fd) {
     struct stat statbuf;
     bool pipe = false;
@@ -475,6 +515,12 @@ int main(int argc, char *argv[]) {
 
     if (bmap.checksumType != "sha256") {
         std::cerr << "Unsupported checksum type: " << bmap.checksumType << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    ret = checkBmap(bmapFile, bmap.bmapChecksum);
+    if (ret != 0) {
+        std::cerr << "BMAP file checksum failed" << std::endl;
         return EXIT_FAILURE;
     }
 
