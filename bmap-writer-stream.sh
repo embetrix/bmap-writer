@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh 
 
 export PATH=$PWD:$PATH
 
@@ -20,12 +20,12 @@ fi
 
 BMAP_URL=$(echo "$IMAGE_URL" | sed 's/\.[^.]*$/.bmap/')
 BMAP_FILE=$(echo "$BMAP_URL" | sed 's/.*\///')
-
 BMAP_FILE="${BMAP_FILE}_"
+
 echo "Downloading $BMAP_URL to $BMAP_FILE"
 $WGET -q $BMAP_URL -O $BMAP_FILE
-if [ $? -ne 0 ]; then
-    echo "Failed to download $BMAP_URL"
+if [ $? -ne 0 ] || [ ! -f $BMAP_FILE ] || [ ! -s $BMAP_FILE ]; then
+    echo "Failed to download $BMAP_URL or file is empty"
     exit 1
 fi
 echo "Streaming $IMAGE_URL to $DEVICE"
