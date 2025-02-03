@@ -50,7 +50,12 @@ struct range_t {
 
 struct bmap_t {
     std::vector<range_t> ranges;
+    std::string checksumType;
     size_t blockSize;
+    size_t blocksTotal;
+    size_t blocksMapped;
+    std::string bmapVersion;
+    std::string bmapChecksum;
 };
 
 int parseBMap(const std::string &filename, bmap_t& bmapData) {
@@ -70,15 +75,53 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
             throw std::string("BMAP file is invalid");
         }
 
+        // Store BMAP version
+        bmapData.bmapVersion = p_root->Attribute("version");
+
         // Parse image information
         tinyxml2::XMLElement * p_data;
+
+        p_data = p_root->FirstChildElement("BlocksCount");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: BlocksCount not found");
+        } else {
+            bmapData.blocksTotal = static_cast<size_t>(std::stoul(p_data->GetText()));
+        }
+
+        p_data = p_root->FirstChildElement("MappedBlocksCount");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: MappedBlocksCount not found");
+        } else {
+            bmapData.blocksMapped = static_cast<size_t>(std::stoul(p_data->GetText()));
+        }
+
+        p_data = p_root->FirstChildElement("ChecksumType");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: ChecksumType not found");
+        } else {
+            for (const auto ch: std::string(p_data->GetText())) {
+                if (!std::isspace(ch)) {
+                    bmapData.checksumType.push_back(static_cast<char>(std::tolower(ch)));
+                }
+            }
+        }
+
+        p_data = p_root->FirstChildElement("BmapFileChecksum");
+        if (p_data == nullptr) {
+            throw std::string("BMAP: BmapFileChecksum not found");
+        } else {
+            for (const auto ch: std::string(p_data->GetText())) {
+                if (!std::isspace(ch)) {
+                    bmapData.bmapChecksum.push_back(static_cast<char>(ch));
+                }
+            }
+        }
 
         p_data = p_root->FirstChildElement("BlockSize");
         if (p_data == nullptr) {
             throw std::string("BMAP: BlockSize not found");
         } else {
             bmapData.blockSize = static_cast<size_t>(std::stoul(p_data->GetText()));
-            //std::cout << "BlockSize: " << bmapData.blockSize << std::endl;
         }
 
         p_data = p_root->FirstChildElement("BlockMap");
@@ -119,6 +162,46 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
                 bmapData.ranges.push_back(r);
 
                 p_range = p_range->NextSiblingElement("Range");
+            }
+        }
+    } catch (const std::string& err) {
+        std::cerr << err << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int checkBmap(const std::string &filename, const std::string& checksum) {
+    try {
+        std::ifstream file(filename);
+        std::string line;
+
+        if (!file.is_open()) {
+            throw std::string("Failed to open BMAP file");
+        } else {
+            SHA256Ctx sha256Ctx = {};
+
+            while (std::getline(file, line)) {
+                std::size_t found = line.find(checksum);
+                // The actual checksum of the BMAP file shall be replaced with a set of '0'
+                if (found != std::string::npos) {
+                    line = line.replace(found, checksum.size(), checksum.size(), '0');
+                }
+                // add the newline character not read by std::getline
+                line.push_back('\n');
+                sha256Update(sha256Ctx, line);
+            }
+
+            file.close();
+
+            std::string compChecksum = sha256Finalize(sha256Ctx);
+            if (compChecksum.compare(checksum) != 0) {
+                std::stringstream serr;
+                serr << "BMAP checksum invalid" << std::endl;
+                serr << "Computed Checksum: " << compChecksum << std::endl;
+                serr << "Expected Checksum: " << checksum;
+                throw std::string(serr.str());
             }
         }
     } catch (const std::string& err) {
@@ -430,6 +513,17 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    if (bmap.checksumType != "sha256") {
+        std::cerr << "Unsupported checksum type: " << bmap.checksumType << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    ret = checkBmap(bmapFile, bmap.bmapChecksum);
+    if (ret != 0) {
+        std::cerr << "BMAP file checksum failed" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     if (image_fd < 0) {
         image_fd = ::open(imageFile.c_str(), O_RDONLY);
         if (image_fd < 0) {
@@ -437,6 +531,14 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
     }
+
+    std::cout << "BMAP format version: " << bmap.bmapVersion << std::endl;
+    std::cout << "Image size: " << (bmap.blocksTotal * bmap.blockSize) << " bytes" << std::endl;
+    std::cout << "Block size: " << bmap.blockSize << " bytes" << std::endl;
+    std::cout << "Mapped blocks: " << bmap.blocksMapped << " out of " << bmap.blocksTotal
+              << " (" << std::fixed << std::setprecision(1)
+              << (100.0 * static_cast<float>(bmap.blocksMapped) / static_cast<float>(bmap.blocksTotal))
+              << "%)" << std::endl;
 
     ret = BmapWriteImage(image_fd, bmap, device, noVerify);
     if (ret != 0) {
