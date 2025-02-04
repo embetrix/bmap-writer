@@ -99,7 +99,7 @@ Note: the [bmap-writer-stream.sh](bmap-writer-stream.sh) script can be used for 
  
 ## Yocto Integration
 
-`bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer/bmap-writer_git.bb).
+`bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer).
 
 
 ## License
