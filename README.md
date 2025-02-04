@@ -16,6 +16,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 - Handles all compression filters that are supported by `libarchive`, decompressing the data on-the-fly during the writing process.
 - Ensures data integrity by verifying checksums for each block.
 - Writes only the necessary blocks, reducing the overall write time and wear on storage devices.
+- Can use the Linux kernel crypto API to leverage hardware-accelerate hashing.
 
 ## How It Works
 
@@ -28,6 +29,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 - CMake
 - Libarchive
 - TinyXML-2
+- libkcapi (optional)
 
 ## Build and Installation
 
@@ -37,7 +39,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y libarchive-dev libtinyxml2-dev
+sudo apt-get install -y libarchive-dev libtinyxml2-dev libkcapi-dev
 ```
 
 ## Build
@@ -45,6 +47,15 @@ sudo apt-get install -y libarchive-dev libtinyxml2-dev
 ```sh
 cmake .
 make
+```
+
+### Enable support for the Linux kernel crypto API
+
+To enable support for the Linux kernel crypto API, which is disabled by default, the `USE_KERNEL_CRYPTO_API` option
+shall be set to `ON`:
+
+```sh
+cmake -DUSE_KERNEL_CRYPTO_API=ON .
 ```
 
 ## Test

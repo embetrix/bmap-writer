@@ -182,6 +182,10 @@ int checkBmap(const std::string &filename, const std::string& checksum) {
         } else {
             SHA256Ctx sha256Ctx = {};
 
+            if (sha256Init(sha256Ctx) != 0) {
+                throw std::string("Failed to initalize hasher");
+            }
+
             while (std::getline(file, line)) {
                 std::size_t found = line.find(checksum);
                 // The actual checksum of the BMAP file shall be replaced with a set of '0'
@@ -363,6 +367,10 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
                 // Read back written data and compute checksum on it.
                 size_t readSize = 0;
                 SHA256Ctx verifySha256Ctx = {};
+
+                if (sha256Init(verifySha256Ctx) != 0) {
+                    throw std::string("Failed to initalize hasher");
+                }
 
                 while (readSize < writtenSize) {
                     size_t bufferSize = (maxBufferSize > 0) ? maxBufferSize : writtenSize;

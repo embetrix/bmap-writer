@@ -27,6 +27,12 @@ else()
     message(FATAL_ERROR "libarchive not found")
 endif()
 
+option(USE_KERNEL_CRYPTO_API "Use the kernel crypto API to perform the hashing")
+if(USE_KERNEL_CRYPTO_API)
+    list(APPEND CRYPTO_LIBRARIES kcapi)
+    add_compile_definitions(USE_KERNEL_CRYPTO_API)
+endif()
+
 if (NOT DEFINED DEFAULT_READ_BLK_SIZE)
   set(DEFAULT_READ_BLK_SIZE 16384)
 endif()
@@ -47,7 +53,7 @@ add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LibArchive_LIBRARIES})
+target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LibArchive_LIBRARIES} ${CRYPTO_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
