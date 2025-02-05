@@ -97,9 +97,10 @@ curl -u user:password sftp://hostname/path/to/image.gz | bmap-writer - image.bma
 
 Note: the [bmap-writer-stream.sh](bmap-writer-stream.sh) script can be used for stream processing tasks.
  
-## Yocto Integration
+## Yocto/Buildroot Integration
 
-`bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer).
+`bmap-writer` is already available in [meta-openembedded](https://github.com/openembedded/meta-openembedded/blob/master/meta-oe/recipes-support/bmap-writer) and [buildroot](https://github.com/buildroot/buildroot/tree/master/package/bmap-writer
+)
 
 
 ## License
