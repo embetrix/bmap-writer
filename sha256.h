@@ -25,6 +25,10 @@
 #include <string>
 #include <array>
 
+#ifdef USE_KERNEL_CRYPTO_API
+#include <kcapi.h>
+#endif
+
 // SHA256 constants
 constexpr uint32_t k[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -46,10 +50,15 @@ struct SHA256Ctx {
     uint64_t bitLength = 0;
     std::array<uint8_t, 64> dataBlock{};
     size_t dataBlockIndex = 0;
+#ifdef USE_KERNEL_CRYPTO_API
+    struct kcapi_handle *handle = nullptr;
+#endif
+    bool initialized = false;
 };
 
 // Public functions
-void sha256Update(SHA256Ctx& context, const std::string& data);
+int sha256Init(SHA256Ctx& context);
+int sha256Update(SHA256Ctx& context, const std::string& data);
 std::string sha256Finalize(SHA256Ctx& context);
 
 #endif // SHA256_H

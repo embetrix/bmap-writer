@@ -21,8 +21,13 @@
 
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 #include <cstring>
 #include <cstdint>
+
+#ifdef USE_KERNEL_CRYPTO_API
+#include <kcapi.h>
+#endif
 
 #include "sha256.h"
 
@@ -82,44 +87,96 @@ void sha256Transform(SHA256Ctx& context) {
     context.h[7] += h;
 }
 
-void sha256Update(SHA256Ctx& context, const std::string& data) {
+int sha256Init(SHA256Ctx& context) {
+    if (!context.initialized) {
+#ifdef USE_KERNEL_CRYPTO_API
+        const char *hashname = "sha256";
+        static bool warned = false;
+        int ret;
+
+        ret = kcapi_md_init(&context.handle, hashname, 0);
+        if ((ret != 0) && !warned) {
+            std::cerr << "Failed to init kernel crypto API: " << ret << std::endl;
+            std::cerr << "Falling back to software hashing" << std::endl;
+            warned = true;
+        }
+#endif
+        context.initialized = true;
+    }
+
+    return 0;
+}
+
+int sha256Update(SHA256Ctx& context, const std::string& data) {
     const uint8_t* input = reinterpret_cast<const uint8_t*>(data.data());
     size_t length = data.size();
+    int ret = -1;
 
-    while (length--) {
-        context.dataBlock[context.dataBlockIndex++] = *input++;
-        context.bitLength += 8;
+    if (context.initialized) {
+#ifdef USE_KERNEL_CRYPTO_API
+        if (context.handle != nullptr) {
+            if (kcapi_md_update(context.handle, input, length) == 0) {
+                ret = 0;
+            }
+        } else
+#endif
+        {
+            while (length--) {
+                context.dataBlock[context.dataBlockIndex++] = *input++;
+                context.bitLength += 8;
 
-        if (context.dataBlockIndex == 64) {
-            sha256Transform(context);
-            context.dataBlockIndex = 0;
+                if (context.dataBlockIndex == 64) {
+                    sha256Transform(context);
+                    context.dataBlockIndex = 0;
+                }
+            }
         }
     }
+
+    return ret;
 }
 
 std::string sha256Finalize(SHA256Ctx& context) {
-    context.dataBlock[context.dataBlockIndex++] = 0x80;
-
-    if (context.dataBlockIndex > 56) {
-        while (context.dataBlockIndex < 64) {
-            context.dataBlock[context.dataBlockIndex++] = 0x00;
-        }
-        sha256Transform(context);
-        context.dataBlockIndex = 0;
-    }
-
-    while (context.dataBlockIndex < 56) {
-        context.dataBlock[context.dataBlockIndex++] = 0x00;
-    }
-
-    uint64_t bitLengthBigEndian = __builtin_bswap64(context.bitLength);
-    std::memcpy(&context.dataBlock[56], &bitLengthBigEndian, sizeof(bitLengthBigEndian));
-    sha256Transform(context);
-
     std::ostringstream output;
     output << std::hex << std::setfill('0');
-    for (uint32_t value : context.h) {
-        output << std::setw(8) << value;
+
+    if (context.initialized) {
+#ifdef USE_KERNEL_CRYPTO_API
+        if (context.handle != nullptr) {
+            std::array<uint8_t, 64> buf;
+            ssize_t ret = kcapi_md_final(context.handle, buf.data(), buf.size());
+            kcapi_md_destroy(context.handle);
+            context.handle = nullptr;
+
+            for (auto i = 0; i < ret; i++) {
+                output << std::setw(2) << static_cast<uint32_t>(buf.data()[i]);
+            }
+        } else
+#endif
+        {
+            context.dataBlock[context.dataBlockIndex++] = 0x80;
+
+            if (context.dataBlockIndex > 56) {
+                while (context.dataBlockIndex < 64) {
+                    context.dataBlock[context.dataBlockIndex++] = 0x00;
+                }
+                sha256Transform(context);
+                context.dataBlockIndex = 0;
+            }
+
+            while (context.dataBlockIndex < 56) {
+                context.dataBlock[context.dataBlockIndex++] = 0x00;
+            }
+
+            uint64_t bitLengthBigEndian = __builtin_bswap64(context.bitLength);
+            std::memcpy(&context.dataBlock[56], &bitLengthBigEndian, sizeof(bitLengthBigEndian));
+            sha256Transform(context);
+
+            for (uint32_t value : context.h) {
+                output << std::setw(8) << value;
+            }
+        }
     }
+
     return output.str();
 }
