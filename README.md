@@ -16,7 +16,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 - Handles all compression filters that are supported by `libarchive`, decompressing the data on-the-fly during the writing process.
 - Ensures data integrity by verifying checksums for each block.
 - Writes only the necessary blocks, reducing the overall write time and wear on storage devices.
-- Can use the Linux kernel crypto API to leverage hardware-accelerate hashing.
+- Can use the Linux kernel crypto API to leverage hardware-accelerated hashing.
 
 ## How It Works
 
@@ -27,7 +27,7 @@ Unlike the Yocto BMAP tool, `bmap-writer` is C++ based does not require Python a
 
 - C++ compiler
 - CMake
-- Libarchive
+- libarchive
 - TinyXML-2
 - libkcapi (optional)
 
@@ -131,7 +131,7 @@ The commercial license provides:
 - Priority access to updates, integration help, and extended documentation.
 - Tailored development and deployment solutions.
 
-To obtain a commercial license or inquire further, please contact: [**info@embetrix.com**](mailto:info@embetrix.com)
+To obtain a commercial license or inquire further, please contact: [info@embetrix.com](mailto:info@embetrix.com)
 
 
 ## Contributor License Agreement (CLA)
