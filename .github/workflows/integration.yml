@@ -84,8 +84,10 @@ jobs:
           VERSION=$(git describe --tags | sed 's/^v//')
           sed -i "1s/([^)]*)/(${VERSION})/" debian/changelog
           dpkg-buildpackage -us -uc -b
+          mv -f ../*.deb .
 
     - name: Move Debian packages
+      if: matrix.arch == 'amd64'
       run: mv -f ../*.deb . 2>/dev/null || true
 
     - name: Upload Debian package
