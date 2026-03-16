@@ -1,0 +1,18 @@
+Source: bmap-writer
+Section: utils
+Priority: optional
+Maintainer: Embetrix <info@embetrix.com>
+Build-Depends: debhelper-compat (= 13), cmake, pkg-config, libtinyxml2-dev, libarchive-dev, libkcapi-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/embetrix/bmap-writer
+Rules-Requires-Root: no
+
+Package: bmap-writer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: curl
+Description: Block map based image writer
+ A tool to write images to block devices using block map (bmap) files.
+ Bmap files describe the useful content of the image and allow for
+ faster and more efficient flashing by only writing the blocks that
+ contain data.
