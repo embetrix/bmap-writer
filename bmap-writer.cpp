@@ -381,7 +381,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, const std::string &device, bool n
                     std::vector<char> buffer(bufferSize);
 
                     ssize_t readData = pread(dev_fd, buffer.data(), buffer.size(), writeOffset + static_cast<off_t>(readSize));
-                    if (readData != buffer.size()) {
+                    if (readData < 0 || static_cast<size_t>(readData) != buffer.size()) {
                         throw std::string("Failed to re-read from device: ") + std::to_string(readData);
                     }
 
