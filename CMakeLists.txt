@@ -18,11 +18,11 @@ else()
     message(FATAL_ERROR "tinyxml2 library not found")
 endif()
 
-
 # Find libarchive
-find_package(LibArchive REQUIRED)
-if (LibArchive_FOUND)
-    include_directories(${LIBARCHIVE_INCLUDE_DIR})
+pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
+if (LIBARCHIVE_FOUND)
+    include_directories(${LIBARCHIVE_INCLUDE_DIRS})
+    link_directories(${LIBARCHIVE_LIBRARY_DIRS})
 else()
     message(FATAL_ERROR "libarchive not found")
 endif()
@@ -60,7 +60,7 @@ add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LibArchive_LIBRARIES} ${CRYPTO_LIBRARIES})
+target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LIBARCHIVE_LIBRARIES} ${CRYPTO_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
@@ -68,4 +68,4 @@ install(PROGRAMS bmap-writer-stream.sh DESTINATION bin RENAME bmap-writer-stream
 
 # Enable testing
 enable_testing()
-add_test(NAME bmap-writer-test COMMAND ./bmap-writer-test.sh)
+add_test(NAME bmap-writer-test COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bmap-writer-test.sh)

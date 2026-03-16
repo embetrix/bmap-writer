@@ -5,6 +5,7 @@ name: integration
 on:
   push:
     branches: [ "master" ]
+    tags: [ "*" ]
   pull_request:
     branches: [ "master" ]
 
@@ -42,4 +43,72 @@ jobs:
       # Execute tests defined by the CMake configuration.
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ctest -V -C ${{env.BUILD_TYPE}}
+
+  deb:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            run_on_arch: false
+          - arch: arm64
+            run_on_arch: aarch64
+          - arch: armhf
+            run_on_arch: armv7
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build Debian package (amd64)
+      if: matrix.arch == 'amd64'
+      run: |
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y build-essential debhelper cmake pkg-config libtinyxml2-dev libarchive-dev libkcapi-dev
+        VERSION=$(git describe --tags | sed 's/^v//')
+        sed -i "1s/([^)]*)/(${VERSION})/" debian/changelog
+        dpkg-buildpackage -us -uc -b
+
+    - name: Build Debian package (${{matrix.arch}})
+      if: matrix.arch != 'amd64'
+      uses: uraimo/run-on-arch-action@d94c13912ea685de38fccc1109385b83fd79427d # v3.0.1
+      with:
+        arch: ${{matrix.run_on_arch}}
+        distro: ubuntu_latest
+        githubToken: ${{github.token}}
+        install: |
+          apt-get update
+          apt-get --no-install-recommends install -y build-essential debhelper cmake pkg-config libtinyxml2-dev libarchive-dev libkcapi-dev git
+        run: |
+          git config --global --add safe.directory /home/runner/work/bmap-writer/bmap-writer
+          VERSION=$(git describe --tags | sed 's/^v//')
+          sed -i "1s/([^)]*)/(${VERSION})/" debian/changelog
+          dpkg-buildpackage -us -uc -b
+
+    - name: Move Debian packages
+      run: mv -f ../*.deb . 2>/dev/null || true
+
+    - name: Upload Debian package
+      uses: actions/upload-artifact@v4
+      with:
+        name: debian-package-${{matrix.arch}}
+        path: "*.deb"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, deb]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: debian-package-*
+        merge-multiple: true
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+      with:
+        files: "*.deb"
 
