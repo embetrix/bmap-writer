@@ -1,0 +1,9 @@
+debian/.debhelper/
+debian/bmap-writer/
+debian/bmap-writer-dbgsym/
+debian/files
+debian/*.substvars
+debian/*.debhelper.log
+debian/debhelper-build-stamp
+obj-*/
+build/

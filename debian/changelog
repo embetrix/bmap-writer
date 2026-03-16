@@ -1,0 +1,5 @@
+bmap-writer (1.0.2) unstable; urgency=medium
+
+  * Initial Debian packaging.
+
+ -- Embetrix <info@embetrix.com>  Mon, 16 Mar 2026 12:00:00 +0000
