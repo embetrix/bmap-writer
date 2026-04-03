@@ -58,6 +58,14 @@ shall be set to `ON`:
 cmake -DUSE_KERNEL_CRYPTO_API=ON .
 ```
 
+### Static build
+
+To build a statically linked binary:
+
+```sh
+cmake -DBUILD_STATIC=ON .
+```
+
 ## Test
 
 ```sh
