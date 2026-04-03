@@ -23,6 +23,32 @@ pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
 if (LIBARCHIVE_FOUND)
     include_directories(${LIBARCHIVE_INCLUDE_DIRS})
     link_directories(${LIBARCHIVE_LIBRARY_DIRS})
+
+    set(BMAP_WRITER_LIBARCHIVE_LIBS ${LIBARCHIVE_LDFLAGS})
+    set(BMAP_WRITER_USE_STATIC_LIBARCHIVE FALSE)
+
+    foreach(lib ${LIBARCHIVE_LINK_LIBRARIES})
+        if (lib MATCHES "\\.a$")
+            set(BMAP_WRITER_USE_STATIC_LIBARCHIVE TRUE)
+            break()
+        endif()
+    endforeach()
+
+    if (NOT BMAP_WRITER_USE_STATIC_LIBARCHIVE)
+        foreach(libdir ${LIBARCHIVE_LIBRARY_DIRS})
+            if (EXISTS "${libdir}/libarchive.a" AND
+                NOT EXISTS "${libdir}/libarchive.so" AND
+                NOT EXISTS "${libdir}/libarchive.so.0" AND
+                NOT EXISTS "${libdir}/libarchive.dylib")
+                set(BMAP_WRITER_USE_STATIC_LIBARCHIVE TRUE)
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if (BMAP_WRITER_USE_STATIC_LIBARCHIVE)
+        set(BMAP_WRITER_LIBARCHIVE_LIBS ${LIBARCHIVE_STATIC_LDFLAGS})
+    endif()
 else()
     message(FATAL_ERROR "libarchive not found")
 endif()
@@ -60,7 +86,7 @@ add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
 target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
 
 # Link the libraries
-target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${LIBARCHIVE_LIBRARIES} ${CRYPTO_LIBRARIES})
+target_link_libraries(bmap-writer ${TINYXML2_LIBRARIES} ${BMAP_WRITER_LIBARCHIVE_LIBS} ${CRYPTO_LIBRARIES})
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
