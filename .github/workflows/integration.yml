@@ -44,6 +44,37 @@ jobs:
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ctest -V -C ${{env.BUILD_TYPE}}
 
+  static:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get --no-install-recommends install -y libarchive-dev libkcapi-dev pkg-config bmap-tools libssl-dev tar bzip2 gzip lz4 lzop xz-utils zstd python3 wget
+
+    - name: Build tinyxml2 static library
+      run: |
+        git clone --depth 1 --branch 10.0.0 https://github.com/leethomason/tinyxml2.git /tmp/tinyxml2
+        cmake -B /tmp/tinyxml2/build -S /tmp/tinyxml2 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -Dtinyxml2_BUILD_TESTING=OFF
+        cmake --build /tmp/tinyxml2/build
+        sudo cmake --install /tmp/tinyxml2/build
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DBUILD_STATIC=ON -DUSE_KERNEL_CRYPTO_API=ON
+
+    - name: Build
+      run: cmake --build ${{github.workspace}} --config ${{env.BUILD_TYPE}}
+
+    - name: Verify static binary
+      run: |
+        file bmap-writer
+        ldd bmap-writer 2>&1 | grep -q 'not a dynamic executable'
+
+    - name: Test
+      working-directory: ${{github.workspace}}
+      run: ctest -V -C ${{env.BUILD_TYPE}}
+
   deb:
     runs-on: ubuntu-latest
     strategy:
@@ -98,7 +129,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build, deb]
+    needs: [build, deb, static]
     runs-on: ubuntu-latest
     permissions:
       contents: write
