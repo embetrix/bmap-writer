@@ -233,7 +233,7 @@ bool isDeviceMounted(const std::string &device) {
     std::ifstream mounts("/proc/mounts");
     std::string line;
     while (std::getline(mounts, line)) {
-        if (line.find(device) != std::string::npos) {
+        if (line.compare(0, device.size() + 1, device + " ") == 0) {
             return true;
         }
     }
