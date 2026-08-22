@@ -26,6 +26,8 @@
 #include <iomanip>
 #include <string>
 #include <chrono>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
@@ -41,6 +43,12 @@
 #include <tinyxml2.h>
 
 #include "sha256.h"
+
+enum mount_state_t {
+    DEVICE_UNMOUNTED = 0,
+    DEVICE_MOUNTED,
+    DEVICE_SCAN_FAILED,
+};
 
 struct range_t {
     std::string checksum;
@@ -229,15 +237,61 @@ bool isPipe(int fd) {
     return pipe;
 }
 
-bool isDeviceMounted(const std::string &device) {
+bool isPartitionOf(const std::string& source, const std::string& device)
+{
+    if (device.empty() || source.compare(0, device.size(), device) != 0) {
+        return false;
+    }
+    std::string suffix = source.substr(device.size());
+    if (suffix.empty()) {
+        return false;
+    }
+    // Devices ending in a digit use "p" before the partition number:
+    // /dev/mmcblk0p1, /dev/nvme0n1p1
+    if (std::isdigit(static_cast<unsigned char>(device.back()))) {
+        if (suffix.front() != 'p') {
+            return false;
+        }
+        suffix.erase(0, 1);
+    }
+    // Other devices use the number directly:
+    // /dev/sda1
+    return !suffix.empty() &&
+           std::all_of(suffix.begin(), suffix.end(),
+                       [](unsigned char c) { return std::isdigit(c); });
+}
+
+mount_state_t isDeviceMounted(const std::string& device)
+{
     std::ifstream mounts("/proc/mounts");
     std::string line;
+
+    if (!mounts.is_open()) {
+        std::cerr << "Failed to open /proc/mounts: " << strerror(errno) << std::endl;
+        return DEVICE_SCAN_FAILED;
+    }
+
     while (std::getline(mounts, line)) {
-        if (line.find(device) != std::string::npos) {
-            return true;
+        std::istringstream entry(line);
+        std::string source;
+
+        if (!(entry >> source)) {
+            continue;
+        }
+
+        if (source == device || isPartitionOf(source, device)) {
+            return DEVICE_MOUNTED;
         }
     }
-    return false;
+
+    // The loop also ends on a read error, which leaves the mount table
+    // only partially scanned
+    if (mounts.bad()) {
+        std::cerr << "Failed to read /proc/mounts: " << strerror(errno) << std::endl;
+        return DEVICE_SCAN_FAILED;
+    }
+
+    return DEVICE_UNMOUNTED;
 }
 
 int getFreeMemory(size_t *memory, unsigned int divider = 1) {
@@ -509,8 +563,12 @@ int main(int argc, char *argv[]) {
         std::cout << "Starting bmap-writer..." << std::endl;
     }
 
-    if (isDeviceMounted(device)) {
+    mount_state_t mountState = isDeviceMounted(device);
+    if (mountState == DEVICE_MOUNTED) {
         std::cerr << "Error device: " << device << " is mounted. Please unmount it before proceeding." << std::endl;
+        return EXIT_FAILURE;
+    } else if (mountState == DEVICE_SCAN_FAILED) {
+        std::cerr << "Error: cannot determine whether device: " << device << " is mounted, refusing to write." << std::endl;
         return EXIT_FAILURE;
     }
 
