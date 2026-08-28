@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 # Project name
 project(bmap-writer)
@@ -40,7 +40,7 @@ else()
     link_directories(${LIBARCHIVE_LIBRARY_DIRS})
 endif()
 
-option(USE_KERNEL_CRYPTO_API "Use the kernel crypto API to perform the hashing")
+option(USE_KERNEL_CRYPTO_API "Use the kernel crypto API to perform the hashing" OFF)
 if(USE_KERNEL_CRYPTO_API)
     pkg_check_modules(LIBKCAPI REQUIRED libkcapi)
     if (LIBKCAPI_FOUND)
@@ -77,9 +77,39 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_compile_definitions(READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE})
 add_compile_definitions(GIT_VERSION="${GIT_VERSION}")
 
+if(USE_KERNEL_CRYPTO_API)
+    message(STATUS "Hashing: Linux kernel crypto API (libkcapi)")
+else()
+    message(STATUS "Hashing: built-in software SHA-256")
+    pkg_check_modules(LIBKCAPI_PROBE QUIET libkcapi)
+    if(LIBKCAPI_PROBE_FOUND)
+        message(STATUS "  libkcapi is installed here")
+    endif()
+endif()
+
 # Add the executable
 add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
-target_compile_options(bmap-writer PUBLIC -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror)
+target_compile_options(bmap-writer PRIVATE
+    -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror
+    -fstack-protector-strong)
+
+# _FORTIFY_SOURCE only does anything in an optimising build, and older glibc
+# (<= 2.35) emits "#warning _FORTIFY_SOURCE requires compiling with
+# optimization" without one, which -Werror turns into a build failure. Listing
+# the optimised configurations explicitly also covers an unset CMAKE_BUILD_TYPE,
+# which "cmake ." leaves empty.
+set(BMAP_OPTIMIZED_BUILD $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>)
+target_compile_options(bmap-writer PRIVATE
+    $<${BMAP_OPTIMIZED_BUILD}:-U_FORTIFY_SOURCE>
+    $<${BMAP_OPTIMIZED_BUILD}:-D_FORTIFY_SOURCE=2>)
+
+target_link_options(bmap-writer PRIVATE -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
+
+# A static binary cannot also be a position-independent executable.
+if(NOT BUILD_STATIC)
+    target_compile_options(bmap-writer PRIVATE -fPIE)
+    target_link_options(bmap-writer PRIVATE -pie)
+endif()
 
 # Link the libraries
 if(BUILD_STATIC)

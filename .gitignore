@@ -7,3 +7,15 @@ debian/*.debhelper.log
 debian/debhelper-build-stamp
 obj-*/
 build/
+
+# In-tree CMake build (this is how CI configures the project)
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+Makefile
+/bmap-writer
+
+# Artifacts written by the test scripts
+test.img*
+test*.img.out
