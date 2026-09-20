@@ -45,8 +45,8 @@ sudo apt-get install -y libarchive-dev libtinyxml2-dev libkcapi-dev
 ## Build
 
 ```sh
-cmake .
-make
+cmake -S . -B build
+cmake --build build
 ```
 
 ### Enable support for the Linux kernel crypto API
@@ -55,7 +55,8 @@ To enable support for the Linux kernel crypto API, which is disabled by default,
 shall be set to `ON`:
 
 ```sh
-cmake -DUSE_KERNEL_CRYPTO_API=ON .
+cmake -S . -B build -DUSE_KERNEL_CRYPTO_API=ON
+cmake --build build
 ```
 
 ### Static build
@@ -63,20 +64,36 @@ cmake -DUSE_KERNEL_CRYPTO_API=ON .
 To build a statically linked binary:
 
 ```sh
-cmake -DBUILD_STATIC=ON .
+cmake -S . -B build -DBUILD_STATIC=ON
+cmake --build build
 ```
 
 ## Test
 
 ```sh
+cd build
 ctest -V
+cd ..
 ```
 
 ## Install
 
 ```sh
-sudo make install
+sudo cmake --install build
 ```
+
+## Source layout
+
+All C++ sources and internal headers live in `src/`:
+
+- `main.cpp`: command-line options and orchestration.
+- `bmap.cpp` / `bmap.h`: BMAP parsing, validation, and file checksum verification.
+- `device.cpp` / `device.h`: mount checks, device access, and reliable I/O.
+- `image_writer.cpp` / `image_writer.h`: decompression, mapped writes, and read-back verification.
+- `sha256.cpp` / `sha256.h`: software and Linux kernel SHA-256 backends.
+- `error.h` and `fd_guard.h`: shared error type and file descriptor ownership.
+
+Integration tests live in `test/`, and the streaming helper lives in `extras/`.
 
 ## Usage
 
@@ -114,7 +131,7 @@ curl -u user:password sftp://hostname/path/to/image.bmap > image.bmap
 curl -u user:password sftp://hostname/path/to/image.gz | bmap-writer - image.bmap /dev/sdX
 ```
 
-Note: the [bmap-writer-stream.sh](bmap-writer-stream.sh) script can be used for stream processing tasks.
+Note: the [bmap-writer-stream.sh](extras/bmap-writer-stream.sh) script can be used for stream processing tasks.
  
 ## Yocto/Buildroot Integration
 
@@ -151,4 +168,3 @@ By submitting a pull request to this repository, you agree to the following term
    - Use, modify, sublicense, and distribute your contribution under the terms of the **GPLv3**.
    - Use, modify, sublicense, and distribute your contribution under alternative licenses, including commercial licenses.
 3. You understand that you retain the copyright to your contribution but agree it may be relicensed under these terms.
-

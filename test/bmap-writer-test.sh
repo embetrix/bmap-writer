@@ -2,7 +2,12 @@
 
 # This script tests the bmap-writer tool
 
-export PATH=$PWD:$PATH
+# CTest supplies the built executable, which may be outside the source tree.
+# Keep the extras directory on PATH for the streaming helper as well.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+BMAP_WRITER=${1:-$PWD/bmap-writer}
+BMAP_WRITER_DIR=$(cd -- "$(dirname -- "$BMAP_WRITER")" && pwd)
+export PATH="$BMAP_WRITER_DIR:$SCRIPT_DIR/../extras:$PATH"
 
 if [ ! -f test.img ]; then
     echo "## Create a file with random data"
@@ -115,9 +120,9 @@ cat test.img.zst | bmap-writer - test.img.bmap test4.zst.img.out
 cmp test.img.out test4.zst.img.out
 
 echo "## Write the file with bmap-writer and zstd from HTTP server"
-python3 -m http.server -d $(pwd) -b 127.0.0.1 8987 &
+python3 -m http.server -d "$PWD" -b 127.0.0.1 8987 &
 SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
 sleep 2
 bmap-writer-stream.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
 cmp test.img.out test5.zst.img.out
-kill $SERVER_PID

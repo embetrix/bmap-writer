@@ -124,8 +124,9 @@ endif()
 
 # Specify the install rules
 install(TARGETS bmap-writer DESTINATION bin)
-install(PROGRAMS bmap-writer-stream.sh DESTINATION bin RENAME bmap-writer-stream)
+install(PROGRAMS extras/bmap-writer-stream.sh DESTINATION bin RENAME bmap-writer-stream)
 
 # Enable testing
 enable_testing()
-add_test(NAME bmap-writer-test COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bmap-writer-test.sh)
+add_test(NAME bmap-writer-test
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/bmap-writer-test.sh $<TARGET_FILE:bmap-writer>)
