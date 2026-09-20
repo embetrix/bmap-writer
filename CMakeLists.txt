@@ -72,11 +72,6 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-add_compile_definitions(READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE})
-add_compile_definitions(GIT_VERSION="${GIT_VERSION}")
-
 if(USE_KERNEL_CRYPTO_API)
     message(STATUS "Hashing: Linux kernel crypto API (libkcapi)")
 else()
@@ -88,7 +83,16 @@ else()
 endif()
 
 # Add the executable
-add_executable(bmap-writer bmap-writer.cpp sha256.cpp)
+add_executable(bmap-writer
+    src/main.cpp
+    src/bmap.cpp
+    src/device.cpp
+    src/image_writer.cpp
+    src/sha256.cpp
+)
+target_compile_definitions(bmap-writer PRIVATE
+    READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE}
+    GIT_VERSION="${GIT_VERSION}")
 target_compile_options(bmap-writer PRIVATE
     -Wformat -Wformat-security -Wconversion -Wsign-conversion -pedantic -Werror
     -fstack-protector-strong)
