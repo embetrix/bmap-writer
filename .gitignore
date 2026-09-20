@@ -8,7 +8,7 @@ debian/debhelper-build-stamp
 obj-*/
 build/
 
-# In-tree CMake build (this is how CI configures the project)
+# In-tree CMake build
 CMakeCache.txt
 CMakeFiles/
 CTestTestfile.cmake
