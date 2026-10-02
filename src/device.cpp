@@ -160,7 +160,13 @@ uint64_t getDeviceSize(int fd) {
     if (::fstat(fd, &statbuf) != 0) {
         return 0;
     }
-    if (S_ISBLK(statbuf.st_mode) && (::ioctl(fd, BLKGETSIZE64, &size) != 0)) {
+    // glibc/uClibc take an unsigned long request and musl/bionic take an int
+#if defined(__GLIBC__) || defined(__UCLIBC__)
+    const unsigned long request = BLKGETSIZE64;
+#else
+    const int request = static_cast<int>(BLKGETSIZE64);
+#endif
+    if (S_ISBLK(statbuf.st_mode) && (::ioctl(fd, request, &size) != 0)) {
         return 0;
     }
 
