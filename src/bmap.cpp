@@ -135,6 +135,7 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
         bmapData.bmapVersion = (version != nullptr) ? trimWhitespace(version) : "unknown";
 
         // Parse image information
+        bmapData.imageSize = requireChildUnsigned(p_root, "ImageSize");
         bmapData.blocksTotal = requireChildUnsigned(p_root, "BlocksCount");
         bmapData.blocksMapped = requireChildUnsigned(p_root, "MappedBlocksCount");
         bmapData.blockSize = requireChildUnsigned(p_root, "BlockSize");
@@ -210,12 +211,16 @@ int validateBmap(const bmap_t& bmap, uint64_t deviceSize) {
 
         const size_t maxBlock = std::numeric_limits<size_t>::max() / bmap.blockSize;
 
-        // Guard the image size itself, not just the individual ranges: an
-        // unbounded BlocksCount would wrap the product below and slip past
-        // the device capacity check.
+        // Guard the rounded-up size used to calculate range endpoints.
         if (bmap.blocksTotal > maxBlock) {
             throw BmapError("BMAP: BlocksCount " + std::to_string(bmap.blocksTotal) +
                             " overflows the address space at this block size");
+        }
+        // Only the last block may be partial. Check without rounding up
+        // ImageSize by addition, which could overflow.
+        if (bmap.imageSize == 0 ||
+            (bmap.imageSize - 1) / bmap.blockSize + 1 != bmap.blocksTotal) {
+            throw BmapError("BMAP: ImageSize is inconsistent with BlocksCount and BlockSize");
         }
 
         bool first = true;
@@ -247,8 +252,7 @@ int validateBmap(const bmap_t& bmap, uint64_t deviceSize) {
             first = false;
         }
 
-        const uint64_t imageSize = static_cast<uint64_t>(bmap.blocksTotal) *
-                                   static_cast<uint64_t>(bmap.blockSize);
+        const uint64_t imageSize = static_cast<uint64_t>(bmap.imageSize);
         if (deviceSize > 0 && imageSize > deviceSize) {
             throw BmapError("Image needs " + std::to_string(imageSize) +
                             " bytes but the target device only holds " +

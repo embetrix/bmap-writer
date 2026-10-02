@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
     FdGuard imageGuard(image_fd);
 
     std::cout << "BMAP format version: " << bmap.bmapVersion << std::endl;
-    std::cout << "Image size: " << (bmap.blocksTotal * bmap.blockSize) << " bytes" << std::endl;
+    std::cout << "Image size: " << bmap.imageSize << " bytes" << std::endl;
     std::cout << "Block size: " << bmap.blockSize << " bytes" << std::endl;
     std::cout << "Mapped blocks: " << bmap.blocksMapped << " out of " << bmap.blocksTotal
               << " (" << std::fixed << std::setprecision(1)

@@ -177,7 +177,8 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         for (const auto &range : bmap.ranges) {
             // validateBmap() has already proven that none of this can overflow.
             const size_t outStart = range.startBlock * bmap.blockSize;
-            const size_t outEnd = (range.endBlock + 1) * bmap.blockSize;
+            const size_t outEnd = std::min((range.endBlock + 1) * bmap.blockSize,
+                                           bmap.imageSize);
             const size_t rangeSize = outEnd - outStart;
             const off_t writeOffset = static_cast<off_t>(outStart);
             size_t writtenSize = 0;

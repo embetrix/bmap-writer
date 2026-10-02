@@ -9,7 +9,10 @@ BMAP_WRITER=${1:-$PWD/bmap-writer}
 BMAP_WRITER_DIR=$(cd -- "$(dirname -- "$BMAP_WRITER")" && pwd)
 export PATH="$BMAP_WRITER_DIR:$SCRIPT_DIR/../extras:$PATH"
 
-if [ ! -f test.img ]; then
+# Include a mapped half-block at EOF to catch reads past ImageSize.
+# Regenerate older, block-aligned fixtures and their cached derivatives.
+IMAGE_SIZE=$((545 * 1024 * 1024 + 2048))
+if [ ! -f test.img ] || [ "$(stat -c %s test.img)" -ne "$IMAGE_SIZE" ]; then
     echo "## Create a file with random data"
     dd if=/dev/urandom of=test.img bs=1M count=10 > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=1M count=2 seek=12 conv=notrunc  > /dev/null 2>&1
@@ -17,6 +20,10 @@ if [ ! -f test.img ]; then
     dd if=/dev/urandom of=test.img bs=4k count=1 seek=131072 conv=notrunc  > /dev/null 2>&1
     dd if=/dev/zero of=test.img bs=1M count=5 seek=540 conv=notrunc     > /dev/null 2>&1
     dd if=/dev/urandom of=test.img bs=1M count=3 seek=540 conv=notrunc  > /dev/null 2>&1
+    dd if=/dev/urandom bs=2048 count=1 >> test.img 2>/dev/null
+
+    rm -f test.img.tar test.img.tar.gz test.img.bz2 test.img.gz \
+        test.img.lz4 test.img.lzo test.img.xz test.img.zst test.img.bmap
 fi
 
 if [ ! -f test.img.tar ]; then

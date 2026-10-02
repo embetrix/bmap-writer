@@ -36,6 +36,7 @@ struct range_t {
 struct bmap_t {
     std::vector<range_t> ranges;
     std::string checksumType;
+    size_t imageSize = 0;
     size_t blockSize = 0;
     size_t blocksTotal = 0;
     size_t blocksMapped = 0;
