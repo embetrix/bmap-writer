@@ -31,6 +31,7 @@
 #include <limits>
 #include <sstream>
 
+#include <sys/types.h>
 #include <tinyxml2.h>
 
 // A bmap block size is the source filesystem's block size, i.e. a few
@@ -48,10 +49,9 @@ static std::string trimWhitespace(const std::string& text) {
     return text.substr(first, text.find_last_not_of(ws) - first + 1);
 }
 
-// Strict unsigned parser. Rejects the empty string, a leading sign (scanf's
-// "%zu" happily wraps "-1" to SIZE_MAX), trailing garbage and values that do
-// not fit in a size_t. Throws std::logic_error subclasses on failure.
-static size_t parseUnsigned(const std::string& text) {
+// Strict unsigned parser: rejects empty input, signs and trailing garbage.
+// std::stoull throws std::out_of_range on overflow.
+static uint64_t parseUnsigned(const std::string& text) {
     if (text.empty() || std::isdigit(static_cast<unsigned char>(text[0])) == 0) {
         throw std::invalid_argument("not an unsigned number");
     }
@@ -60,11 +60,7 @@ static size_t parseUnsigned(const std::string& text) {
     if (consumed != text.size()) {
         throw std::invalid_argument("trailing garbage");
     }
-    // size_t is narrower than unsigned long long on 32-bit targets.
-    if (value > static_cast<unsigned long long>(std::numeric_limits<size_t>::max())) {
-        throw std::out_of_range("does not fit in size_t");
-    }
-    return static_cast<size_t>(value);
+    return static_cast<uint64_t>(value);
 }
 
 // Text of a mandatory child element. tinyxml2 returns nullptr both for a
@@ -86,7 +82,7 @@ static std::string requireChildText(const tinyxml2::XMLElement *root, const char
     return trimmed;
 }
 
-static size_t requireChildUnsigned(const tinyxml2::XMLElement *root, const char *tag) {
+static uint64_t requireChildUnsigned(const tinyxml2::XMLElement *root, const char *tag) {
     const std::string text = requireChildText(root, tag);
     try {
         return parseUnsigned(text);
@@ -138,7 +134,11 @@ int parseBMap(const std::string &filename, bmap_t& bmapData) {
         bmapData.imageSize = requireChildUnsigned(p_root, "ImageSize");
         bmapData.blocksTotal = requireChildUnsigned(p_root, "BlocksCount");
         bmapData.blocksMapped = requireChildUnsigned(p_root, "MappedBlocksCount");
-        bmapData.blockSize = requireChildUnsigned(p_root, "BlockSize");
+        const uint64_t blockSize = requireChildUnsigned(p_root, "BlockSize");
+        if (blockSize > std::numeric_limits<uint32_t>::max()) {
+            throw BmapError("BMAP: BlockSize exceeds the 32-bit range");
+        }
+        bmapData.blockSize = static_cast<uint32_t>(blockSize);
 
         for (const auto ch: requireChildText(p_root, "ChecksumType")) {
             if (!std::isspace(static_cast<unsigned char>(ch))) {
@@ -209,9 +209,9 @@ int validateBmap(const bmap_t& bmap, uint64_t deviceSize) {
             throw BmapError("BMAP: BmapFileChecksum is not a SHA-256 hex digest");
         }
 
-        const size_t maxBlock = std::numeric_limits<size_t>::max() / bmap.blockSize;
+        const uint64_t maxBlock =
+            static_cast<uint64_t>(std::numeric_limits<off_t>::max()) / bmap.blockSize;
 
-        // Guard the rounded-up size used to calculate range endpoints.
         if (bmap.blocksTotal > maxBlock) {
             throw BmapError("BMAP: BlocksCount " + std::to_string(bmap.blocksTotal) +
                             " overflows the address space at this block size");
@@ -224,7 +224,7 @@ int validateBmap(const bmap_t& bmap, uint64_t deviceSize) {
         }
 
         bool first = true;
-        size_t previousEnd = 0;
+        uint64_t previousEnd = 0;
 
         for (const auto &range : bmap.ranges) {
             const std::string where = "BMAP: range " + std::to_string(range.startBlock) + "-" +

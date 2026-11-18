@@ -29,17 +29,17 @@
 
 struct range_t {
     std::string checksum;
-    size_t startBlock = 0;
-    size_t endBlock = 0;
+    uint64_t startBlock = 0;
+    uint64_t endBlock = 0;
 };
 
 struct bmap_t {
     std::vector<range_t> ranges;
     std::string checksumType;
-    size_t imageSize = 0;
-    size_t blockSize = 0;
-    size_t blocksTotal = 0;
-    size_t blocksMapped = 0;
+    uint64_t imageSize = 0;
+    uint32_t blockSize = 0;
+    uint64_t blocksTotal = 0;
+    uint64_t blocksMapped = 0;
     std::string bmapVersion;
     std::string bmapChecksum;
 };

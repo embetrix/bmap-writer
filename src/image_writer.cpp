@@ -90,7 +90,7 @@ private:
 // Reads the range back off the device and checks it against the checksum from
 // the bmap. The page cache is dropped first, so this measures what actually
 // reached the medium rather than what is still sitting in RAM.
-static void verifyRange(int dev_fd, const range_t &range, off_t offset, size_t rangeSize,
+static void verifyRange(int dev_fd, const range_t &range, off_t offset, uint64_t rangeSize,
                         std::vector<char> &buffer) {
     flushDevice(dev_fd);
 #ifdef POSIX_FADV_DONTNEED
@@ -102,12 +102,10 @@ static void verifyRange(int dev_fd, const range_t &range, off_t offset, size_t r
         throw BmapError("Failed to initialize hasher");
     }
 
-    size_t readSize = 0;
+    uint64_t readSize = 0;
     while (readSize < rangeSize) {
-        size_t chunkSize = buffer.size();
-        if (chunkSize > (rangeSize - readSize)) {
-            chunkSize = rangeSize - readSize;
-        }
+        const size_t chunkSize = static_cast<size_t>(
+            std::min<uint64_t>(buffer.size(), rangeSize - readSize));
 
         readFully(dev_fd, buffer.data(), chunkSize, offset + static_cast<off_t>(readSize));
 
@@ -171,26 +169,24 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         // One allocation for the whole run, rather than one per chunk.
         std::vector<char> buffer(chooseBufferSize(bmap.blockSize));
 
-        size_t decHead = 0;
-        size_t totalWrittenSize = 0;
+        uint64_t decHead = 0;
+        uint64_t totalWrittenSize = 0;
 
         for (const auto &range : bmap.ranges) {
             // validateBmap() has already proven that none of this can overflow.
-            const size_t outStart = range.startBlock * bmap.blockSize;
-            const size_t outEnd = std::min((range.endBlock + 1) * bmap.blockSize,
+            const uint64_t outStart = range.startBlock * bmap.blockSize;
+            const uint64_t outEnd = std::min((range.endBlock + 1) * bmap.blockSize,
                                            bmap.imageSize);
-            const size_t rangeSize = outEnd - outStart;
+            const uint64_t rangeSize = outEnd - outStart;
             const off_t writeOffset = static_cast<off_t>(outStart);
-            size_t writtenSize = 0;
+            uint64_t writtenSize = 0;
             bool endOfFile = false;
 
             while ((writtenSize < rangeSize) && !endOfFile) {
                 size_t outBytes = 0;
 
-                size_t chunkLimit = buffer.size();
-                if (chunkLimit > (rangeSize - writtenSize)) {
-                    chunkLimit = (rangeSize - writtenSize);
-                }
+                const size_t chunkLimit = static_cast<size_t>(
+                    std::min<uint64_t>(buffer.size(), rangeSize - writtenSize));
 
                 while (outBytes < chunkLimit) {
                     const ssize_t readData = archive_read_data(a, buffer.data() + outBytes,
@@ -220,7 +216,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
                         std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
                                   buffer.begin() + static_cast<long int>(chunkSize),
                                   buffer.begin());
-                        size_t validData = chunkSize - (outStart - decHead);
+                        const size_t validData = chunkSize - static_cast<size_t>(outStart - decHead);
                         outBytes += validData;
                     }
 

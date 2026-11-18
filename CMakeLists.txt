@@ -91,6 +91,7 @@ add_executable(bmap-writer
     src/sha256.cpp
 )
 target_compile_definitions(bmap-writer PRIVATE
+    _FILE_OFFSET_BITS=64
     READ_BLK_SIZE=${DEFAULT_READ_BLK_SIZE}
     GIT_VERSION="${GIT_VERSION}")
 target_compile_options(bmap-writer PRIVATE
