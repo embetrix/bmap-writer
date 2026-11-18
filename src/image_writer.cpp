@@ -126,6 +126,16 @@ static void verifyRange(int dev_fd, const range_t &range, off_t offset, uint64_t
     }
 }
 
+static void reportProgress(uint64_t writtenBlocks, uint64_t totalBlocks, bool finished) {
+    const double percent = totalBlocks == 0 ? 0.0 :
+        100.0 * static_cast<double>(writtenBlocks) / static_cast<double>(totalBlocks);
+    // Reserve 100.0% for a successful final flush, even after rounding.
+    std::cout << "Written blocks: " << writtenBlocks << " out of " << totalBlocks
+              << " (" << std::fixed << std::setprecision(1)
+              << (finished ? 100.0 : std::min(percent, 99.9)) << "%), "
+              << totalBlocks - writtenBlocks << " remaining" << std::endl;
+}
+
 int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &device, bool noVerify) {
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -169,8 +179,16 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         // One allocation for the whole run, rather than one per chunk.
         std::vector<char> buffer(chooseBufferSize(bmap.blockSize));
 
+        // Count only mapped blocks, since holes are not written.
+        uint64_t totalBlocks = 0;
+        for (const auto &range : bmap.ranges) {
+            totalBlocks += range.endBlock - range.startBlock + 1;
+        }
+
         uint64_t decHead = 0;
         uint64_t totalWrittenSize = 0;
+        auto lastProgress = std::chrono::steady_clock::now();
+        reportProgress(0, totalBlocks, false);
 
         for (const auto &range : bmap.ranges) {
             // validateBmap() has already proven that none of this can overflow.
@@ -229,6 +247,15 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
 
                 writtenSize += outBytes;
                 totalWrittenSize += outBytes;
+
+                // Count a partial final block only when the write completes.
+                const uint64_t writtenBlocks = totalWrittenSize / bmap.blockSize;
+                const auto now = std::chrono::steady_clock::now();
+                if (writtenBlocks < totalBlocks &&
+                    now - lastProgress >= std::chrono::seconds(1)) {
+                    reportProgress(writtenBlocks, totalBlocks, false);
+                    lastProgress = now;
+                }
             }
 
             // The bmap states exactly how many bytes this range needs. Anything
@@ -275,6 +302,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
 
         // Without O_SYNC on every write, this is what makes the data durable.
         flushDevice(dev_fd);
+        reportProgress(totalBlocks, totalBlocks, true);
 
         if (noVerify) {
             std::cout << "Checksum verification skipped" << std::endl;
