@@ -37,6 +37,7 @@
 #include <archive.h>
 #include <fcntl.h>
 #include <sys/sysinfo.h>
+#include <unistd.h>
 
 static int getFreeMemory(size_t *memory, unsigned int divider) {
     struct sysinfo info;
@@ -126,18 +127,29 @@ static void verifyRange(int dev_fd, const range_t &range, off_t offset, uint64_t
     }
 }
 
-static void reportProgress(uint64_t writtenBlocks, uint64_t totalBlocks, bool finished) {
+static void reportProgress(uint64_t writtenBlocks, uint64_t totalBlocks, bool finished,
+                           bool inPlace) {
     const double percent = totalBlocks == 0 ? 0.0 :
         100.0 * static_cast<double>(writtenBlocks) / static_cast<double>(totalBlocks);
+    // Clear the previous terminal line, including any leftover longer text.
+    if (inPlace) {
+        std::cout << "\r\033[K";
+    }
     // Reserve 100.0% for a successful final flush, even after rounding.
     std::cout << "Written blocks: " << writtenBlocks << " out of " << totalBlocks
               << " (" << std::fixed << std::setprecision(1)
               << (finished ? 100.0 : std::min(percent, 99.9)) << "%), "
-              << totalBlocks - writtenBlocks << " remaining" << std::endl;
+              << totalBlocks - writtenBlocks << " remaining";
+    if (finished || !inPlace) {
+        std::cout << '\n';
+    }
+    std::cout << std::flush;
 }
 
 int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &device, bool noVerify) {
     auto start = std::chrono::high_resolution_clock::now();
+    const bool inPlaceProgress = ::isatty(STDOUT_FILENO) != 0;
+    bool progressActive = false;
 
     try {
         ArchiveGuard archiveGuard(archive_read_new());
@@ -188,7 +200,8 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         uint64_t decHead = 0;
         uint64_t totalWrittenSize = 0;
         auto lastProgress = std::chrono::steady_clock::now();
-        reportProgress(0, totalBlocks, false);
+        reportProgress(0, totalBlocks, false, inPlaceProgress);
+        progressActive = inPlaceProgress;
 
         for (const auto &range : bmap.ranges) {
             // validateBmap() has already proven that none of this can overflow.
@@ -253,7 +266,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
                 const auto now = std::chrono::steady_clock::now();
                 if (writtenBlocks < totalBlocks &&
                     now - lastProgress >= std::chrono::seconds(1)) {
-                    reportProgress(writtenBlocks, totalBlocks, false);
+                    reportProgress(writtenBlocks, totalBlocks, false, inPlaceProgress);
                     lastProgress = now;
                 }
             }
@@ -302,7 +315,8 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
 
         // Without O_SYNC on every write, this is what makes the data durable.
         flushDevice(dev_fd);
-        reportProgress(totalBlocks, totalBlocks, true);
+        reportProgress(totalBlocks, totalBlocks, true, inPlaceProgress);
+        progressActive = false;
 
         if (noVerify) {
             std::cout << "Checksum verification skipped" << std::endl;
@@ -319,6 +333,9 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         std::cout << std::endl;
     }
     catch (const std::exception& err) {
+        if (progressActive) {
+            std::cout << std::endl;
+        }
         std::cerr << err.what() << std::endl;
         return EXIT_FAILURE;
     }
