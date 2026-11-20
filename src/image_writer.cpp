@@ -90,7 +90,7 @@ private:
 // Reads the range back off the device and checks it against the checksum from
 // the bmap. The page cache is dropped first, so this measures what actually
 // reached the medium rather than what is still sitting in RAM.
-static void verifyRange(int dev_fd, const range_t &range, off_t offset, size_t rangeSize,
+static void verifyRange(int dev_fd, const range_t &range, off_t offset, uint64_t rangeSize,
                         std::vector<char> &buffer) {
     flushDevice(dev_fd);
 #ifdef POSIX_FADV_DONTNEED
@@ -102,12 +102,10 @@ static void verifyRange(int dev_fd, const range_t &range, off_t offset, size_t r
         throw BmapError("Failed to initialize hasher");
     }
 
-    size_t readSize = 0;
+    uint64_t readSize = 0;
     while (readSize < rangeSize) {
-        size_t chunkSize = buffer.size();
-        if (chunkSize > (rangeSize - readSize)) {
-            chunkSize = rangeSize - readSize;
-        }
+        const size_t chunkSize = static_cast<size_t>(
+            std::min<uint64_t>(buffer.size(), rangeSize - readSize));
 
         readFully(dev_fd, buffer.data(), chunkSize, offset + static_cast<off_t>(readSize));
 
@@ -126,6 +124,16 @@ static void verifyRange(int dev_fd, const range_t &range, off_t offset, size_t r
         err << "Expected Checksum: " << range.checksum;
         throw BmapError(err.str());
     }
+}
+
+static void reportProgress(uint64_t writtenBlocks, uint64_t totalBlocks, bool finished) {
+    const double percent = totalBlocks == 0 ? 0.0 :
+        100.0 * static_cast<double>(writtenBlocks) / static_cast<double>(totalBlocks);
+    // Reserve 100.0% for a successful final flush, even after rounding.
+    std::cout << "Written blocks: " << writtenBlocks << " out of " << totalBlocks
+              << " (" << std::fixed << std::setprecision(1)
+              << (finished ? 100.0 : std::min(percent, 99.9)) << "%), "
+              << totalBlocks - writtenBlocks << " remaining" << std::endl;
 }
 
 int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &device, bool noVerify) {
@@ -171,26 +179,32 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
         // One allocation for the whole run, rather than one per chunk.
         std::vector<char> buffer(chooseBufferSize(bmap.blockSize));
 
-        size_t decHead = 0;
-        size_t totalWrittenSize = 0;
+        // Count only mapped blocks, since holes are not written.
+        uint64_t totalBlocks = 0;
+        for (const auto &range : bmap.ranges) {
+            totalBlocks += range.endBlock - range.startBlock + 1;
+        }
+
+        uint64_t decHead = 0;
+        uint64_t totalWrittenSize = 0;
+        auto lastProgress = std::chrono::steady_clock::now();
+        reportProgress(0, totalBlocks, false);
 
         for (const auto &range : bmap.ranges) {
             // validateBmap() has already proven that none of this can overflow.
-            const size_t outStart = range.startBlock * bmap.blockSize;
-            const size_t outEnd = std::min((range.endBlock + 1) * bmap.blockSize,
+            const uint64_t outStart = range.startBlock * bmap.blockSize;
+            const uint64_t outEnd = std::min((range.endBlock + 1) * bmap.blockSize,
                                            bmap.imageSize);
-            const size_t rangeSize = outEnd - outStart;
+            const uint64_t rangeSize = outEnd - outStart;
             const off_t writeOffset = static_cast<off_t>(outStart);
-            size_t writtenSize = 0;
+            uint64_t writtenSize = 0;
             bool endOfFile = false;
 
             while ((writtenSize < rangeSize) && !endOfFile) {
                 size_t outBytes = 0;
 
-                size_t chunkLimit = buffer.size();
-                if (chunkLimit > (rangeSize - writtenSize)) {
-                    chunkLimit = (rangeSize - writtenSize);
-                }
+                const size_t chunkLimit = static_cast<size_t>(
+                    std::min<uint64_t>(buffer.size(), rangeSize - writtenSize));
 
                 while (outBytes < chunkLimit) {
                     const ssize_t readData = archive_read_data(a, buffer.data() + outBytes,
@@ -220,7 +234,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
                         std::move(buffer.begin() + static_cast<long int>(outStart - decHead),
                                   buffer.begin() + static_cast<long int>(chunkSize),
                                   buffer.begin());
-                        size_t validData = chunkSize - (outStart - decHead);
+                        const size_t validData = chunkSize - static_cast<size_t>(outStart - decHead);
                         outBytes += validData;
                     }
 
@@ -233,6 +247,15 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
 
                 writtenSize += outBytes;
                 totalWrittenSize += outBytes;
+
+                // Count a partial final block only when the write completes.
+                const uint64_t writtenBlocks = totalWrittenSize / bmap.blockSize;
+                const auto now = std::chrono::steady_clock::now();
+                if (writtenBlocks < totalBlocks &&
+                    now - lastProgress >= std::chrono::seconds(1)) {
+                    reportProgress(writtenBlocks, totalBlocks, false);
+                    lastProgress = now;
+                }
             }
 
             // The bmap states exactly how many bytes this range needs. Anything
@@ -279,6 +302,7 @@ int BmapWriteImage(int fd, const bmap_t &bmap, int dev_fd, const std::string &de
 
         // Without O_SYNC on every write, this is what makes the data durable.
         flushDevice(dev_fd);
+        reportProgress(totalBlocks, totalBlocks, true);
 
         if (noVerify) {
             std::cout << "Checksum verification skipped" << std::endl;

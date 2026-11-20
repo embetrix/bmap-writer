@@ -133,3 +133,28 @@ trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
 sleep 2
 bmap-writer-stream.sh http://127.0.0.1:8987/test.img.zst test5.zst.img.out
 cmp test.img.out test5.zst.img.out
+
+# Exercise a larger image, above 32-bit size
+echo "## Create a sparse image of 4096 + 16 MiB"
+LARGE_IMAGE_SIZE=4311744512
+if [ ! -f test.large.img ] || [ "$(stat -c %s test.large.img)" -ne "$LARGE_IMAGE_SIZE" ]; then
+
+    dd if=/dev/urandom of=test.large.img bs=4k count=1 > /dev/null 2>&1
+    # A mapped range starts below 4 GiB and ends above it.
+    dd if=/dev/urandom of=test.large.img bs=4k count=3 seek=1048575 conv=notrunc > /dev/null 2>&1
+    # A final mapped block checks the full image size, not just the boundary.
+    dd if=/dev/urandom of=test.large.img bs=4k count=1 seek=$((LARGE_IMAGE_SIZE / 4096 - 1)) conv=notrunc > /dev/null 2>&1
+    rm -f test.large.img.bmap test.large.img.out test.large.none.img.out
+fi
+
+if [ ! -f test.large.img.bmap ]; then
+    echo "## Create a bmap file for the large image"
+    bmaptool create test.large.img -o test.large.img.bmap
+fi
+
+echo "## Write the large image with bmaptool as reference"
+bmaptool copy test.large.img test.large.img.out
+
+echo "## Write the large image with bmap-writer"
+bmap-writer test.large.img test.large.img.bmap test.large.none.img.out
+cmp test.large.img.out test.large.none.img.out
